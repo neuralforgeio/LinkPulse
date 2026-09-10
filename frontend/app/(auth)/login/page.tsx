@@ -1,35 +1,33 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FadeIn } from "@/components/motion/fade";
-
-interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-}
-
-interface LoginResponse {
-  user: AuthUser;
-  access_token: string;
-  token_type: string;
-  expires_at: string;
-}
+import { useAuth } from "@/components/auth/auth-provider";
 
 export default function LoginPage() {
+  const { login, status } = useAuth();
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
-  const [user, setUser] = useState<AuthUser | null>(null);
+
+  // Already signed in? Skip the form.
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/app/overview");
+    }
+  }, [status, router]);
 
   function fail(message: string) {
     setError(message);
@@ -38,6 +36,8 @@ export default function LoginPage() {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
+
     if (!email.trim() || !password) {
       fail("Please fill in both email and password.");
       return;
@@ -45,11 +45,8 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await api<LoginResponse>("/api/v1/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-      setUser(res.user);
+      await login(email.trim(), password);
+      router.push("/app/overview");
     } catch (err) {
       if (err instanceof ApiError) {
         fail(err.message);
@@ -59,50 +56,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  if (user) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 260, damping: 22 }}
-        className="text-center"
-      >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
-          <svg
-            viewBox="0 0 24 24"
-            className="h-8 w-8"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <motion.path
-              d="M5 13l4 4L19 7"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.45, delay: 0.25 }}
-            />
-          </svg>
-        </div>
-        <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          You&apos;re signed in
-        </h1>
-        <p className="mt-2 text-slate-500 dark:text-slate-400">
-          Welcome back,{" "}
-          <span className="font-medium text-slate-700 dark:text-slate-200">
-            {user.name}
-          </span>
-          .
-        </p>
-        <p className="mt-6 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-500 dark:bg-white/5 dark:text-slate-400">
-          Your session cookie is active in this browser. The full dashboard
-          lands in the next milestone.
-        </p>
-      </motion.div>
-    );
   }
 
   return (
