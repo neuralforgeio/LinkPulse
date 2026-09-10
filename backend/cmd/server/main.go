@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
+	"linkpulse/internal/clickbuffer"
 	"linkpulse/internal/config"
 	"linkpulse/internal/logutil"
 	"linkpulse/internal/server"
@@ -39,18 +41,35 @@ func main() {
         os.Exit(1)
     }
 
+    // Click IP hashing salt. Random per boot when unset: click counting
+    // still works, but unique-visitor estimates reset on restart.
+    clickSalt := cfg.ClickSalt
+    if clickSalt == "" {
+        clickSalt = uuid.New().String()
+        slog.Warn("CLICK_SALT not set — using a random per-boot salt; set it in backend/.env for stable unique-click metrics")
+    }
+
     // Connect to PostgreSQL and verify it answers a ping.
     pool, err := postgres.New(context.Background(), cfg.DatabaseURL)
     if err != nil {
         slog.Error("cannot connect to database", "error", err)
         os.Exit(1)
     }
-    defer pool.Close()
     slog.Info("database connected")
+
+    // Click pipeline: in-memory buffer + background flush worker
+    // (PRD 9.5.5). Redirects enqueue; the worker batches into
+    // click_events and bumps links.click_count.
+    clickBuf := clickbuffer.New(pool, logger, clickbuffer.Options{
+        Size:          cfg.ClickBufferSize,
+        FlushInterval: time.Duration(cfg.ClickFlushIntervalMS) * time.Millisecond,
+        BatchSize:     cfg.ClickFlushBatchSize,
+    })
+    clickBuf.Start()
 
     srv := &http.Server{
         Addr:         ":" + cfg.AppPort,
-        Handler:      server.NewRouter(logger, pool, cfg),
+        Handler:      server.NewRouter(logger, pool, cfg, clickBuf, clickSalt),
         ReadTimeout:  10 * time.Second,
         WriteTimeout: 15 * time.Second,
         IdleTimeout:  60 * time.Second,
@@ -76,5 +95,12 @@ func main() {
     if err := srv.Shutdown(ctx); err != nil {
         slog.Error("graceful shutdown failed", "error", err)
     }
+
+    // Flush every buffered click BEFORE the pool closes (PRD 9.5.5).
+    slog.Info("draining click buffer...")
+    clickBuf.Stop()
+    slog.Info("click buffer flushed — no clicks lost")
+
+    pool.Close()
     slog.Info("server stopped")
 }

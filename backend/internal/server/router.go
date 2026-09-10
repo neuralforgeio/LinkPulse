@@ -15,13 +15,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"linkpulse/internal/auth"
+	"linkpulse/internal/clickbuffer"
 	"linkpulse/internal/config"
 	"linkpulse/internal/link"
+	"linkpulse/internal/redirect"
 	"linkpulse/internal/tenant"
 )
 
 // NewRouter builds the chi router with all global middleware and routes.
-func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Handler {
+func NewRouter(
+    logger *slog.Logger,
+    db *pgxpool.Pool,
+    cfg config.Config,
+    clickBuf *clickbuffer.Buffer,
+    clickSalt string,
+) http.Handler {
     r := chi.NewRouter()
 
     // Global middleware (runs on every request, in this order).
@@ -44,7 +52,7 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
 
     // Health probes (PRD 18.3).
     r.Get("/healthz", handleHealthz)
-    r.Get("/readyz", handleReadyz(db))
+    r.Get("/readyz", handleReadyzy(db))
 
     // Feature handlers.
     authSvc := auth.NewService(db, auth.ServiceConfig{
@@ -60,6 +68,13 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
 
     linkSvc := link.NewService(db, logger, cfg.AppBaseURL)
     linkHandler := link.NewHandler(linkSvc, logger)
+
+    redirectSvc := redirect.NewService(db)
+    redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, cfg.FrontendOrigin)
+
+    // Public redirect engine: GET /{code} (PRD 9.5). Static routes
+    // (healthz, api) always win over this parameter route.
+    r.Get("/{code}", redirectHandler.Resolve)
 
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
@@ -78,8 +93,6 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
         r.Group(func(r chi.Router) {
             r.Use(authSvc.RequireAuth)
 
-            // The invite code itself identifies the workspace, so
-            // accepting is not tenant-scoped (PRD 9.3.2).
             r.Post("/invitations/accept", tenantHandler.AcceptInvite)
 
             r.Route("/tenants", func(r chi.Router) {
@@ -87,24 +100,18 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
                 r.Get("/", tenantHandler.List)
 
                 r.Route("/{tenantId}", func(r chi.Router) {
-                    // Membership gate: everything below requires the
-                    // caller to be a member of this workspace.
                     r.Use(tenantSvc.RequireMembership())
 
                     r.Get("/", tenantHandler.Get)
                     r.Patch("/", tenantHandler.Update)
 
-                    // Members (PRD 9.3.3–9.3.5).
                     r.Get("/members", tenantHandler.ListMembers)
                     r.Patch("/members/{userId}", tenantHandler.UpdateMemberRole)
                     r.Delete("/members/{userId}", tenantHandler.RemoveMember)
                     r.Post("/leave", tenantHandler.Leave)
 
-                    // Invitations (PRD 9.3.1).
                     r.Post("/invitations", tenantHandler.CreateInvite)
 
-                    // Links (PRD 9.4). Reading is open to every member;
-                    // write endpoints check the role inside the handler.
                     r.Route("/links", func(r chi.Router) {
                         r.Get("/", linkHandler.List)
                         r.Post("/", linkHandler.Create)
@@ -125,9 +132,8 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
     writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// handleReadyz reports readiness: the process is alive AND the database
-// is reachable. Returns 503 when the database is down.
-func handleReadyz(db *pgxpool.Pool) http.HandlerFunc {
+// handleReadyzy reports readiness: alive AND the database reachable.
+func handleReadyzy(db *pgxpool.Pool) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
         defer cancel()
