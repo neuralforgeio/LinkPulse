@@ -2,21 +2,22 @@
 package server
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "log/slog"
-    "net/http"
-    "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
 
-    "github.com/go-chi/chi/v5"
-    "github.com/go-chi/chi/v5/middleware"
-    "github.com/go-chi/cors"
-    "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-    "linkpulse/internal/auth"
-    "linkpulse/internal/config"
-    "linkpulse/internal/tenant"
+	"linkpulse/internal/auth"
+	"linkpulse/internal/config"
+	"linkpulse/internal/link"
+	"linkpulse/internal/tenant"
 )
 
 // NewRouter builds the chi router with all global middleware and routes.
@@ -57,16 +58,16 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
     tenantSvc := tenant.NewService(db, logger)
     tenantHandler := tenant.NewHandler(tenantSvc, logger)
 
+    linkSvc := link.NewService(db, logger, cfg.AppBaseURL)
+    linkHandler := link.NewHandler(linkSvc, logger)
+
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
-            // Public endpoints. Refresh & logout authenticate via the
-            // refresh-token cookie, not a Bearer token.
             r.Post("/register", authHandler.Register)
             r.Post("/login", authHandler.Login)
             r.Post("/refresh", authHandler.Refresh)
             r.Post("/logout", authHandler.Logout)
 
-            // Token-protected endpoints.
             r.Group(func(r chi.Router) {
                 r.Use(authSvc.RequireAuth)
                 r.Get("/me", authHandler.Me)
@@ -82,7 +83,6 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
             r.Post("/invitations/accept", tenantHandler.AcceptInvite)
 
             r.Route("/tenants", func(r chi.Router) {
-                // Collection endpoints (no tenant in the URL yet).
                 r.Post("/", tenantHandler.Create)
                 r.Get("/", tenantHandler.List)
 
@@ -102,6 +102,16 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
 
                     // Invitations (PRD 9.3.1).
                     r.Post("/invitations", tenantHandler.CreateInvite)
+
+                    // Links (PRD 9.4). Reading is open to every member;
+                    // write endpoints check the role inside the handler.
+                    r.Route("/links", func(r chi.Router) {
+                        r.Get("/", linkHandler.List)
+                        r.Post("/", linkHandler.Create)
+                        r.Get("/{linkId}", linkHandler.Get)
+                        r.Patch("/{linkId}", linkHandler.Update)
+                        r.Delete("/{linkId}", linkHandler.Delete)
+                    })
                 })
             })
         })
@@ -130,10 +140,7 @@ func handleReadyz(db *pgxpool.Pool) http.HandlerFunc {
     }
 }
 
-// requestLogger logs one line per request (PRD 18.1). The human-readable
-// summary (method, path, status, duration) is the message so the console
-// stays one short line; the request ID rides along as a structured
-// attribute for the JSON file log.
+// requestLogger logs one line per request (PRD 18.1).
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +148,6 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
             ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-            // PRD 18.2: return the request ID in the response header.
             if reqID := middleware.GetReqID(r.Context()); reqID != "" {
                 ww.Header().Set("X-Request-Id", reqID)
             }
@@ -158,7 +164,6 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // writeJSON writes v as a JSON response with the given status code.
-// Health probes use this raw format; API endpoints use httpx instead.
 func writeJSON(w http.ResponseWriter, status int, v any) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(status)
