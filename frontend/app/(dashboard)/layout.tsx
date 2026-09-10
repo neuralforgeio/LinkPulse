@@ -28,12 +28,12 @@ const NAV = [
     icon: LayoutDashboard,
     enabled: true,
   },
-  { href: "/app/links", label: "Links", icon: Link2, enabled: false },
+  { href: "/app/links", label: "Links", icon: Link2, enabled: true },
   {
     href: "/app/analytics",
     label: "Analytics",
     icon: BarChart3,
-    enabled: false,
+    enabled: true,
   },
   {
     href: "/app/settings/members",
