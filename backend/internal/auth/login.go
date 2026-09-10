@@ -1,18 +1,18 @@
 package auth
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"strings"
-	"time"
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "net/http"
+    "strings"
+    "time"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+    "github.com/google/uuid"
+    "github.com/jackc/pgx/v5"
 
-	"linkpulse/internal/httpx"
+    "linkpulse/internal/httpx"
 )
 
 // refreshCookieName carries the refresh token. Path is scoped to the auth
@@ -27,10 +27,10 @@ const dummyHash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$BBBBBBB
 
 // ErrInvalidCredentials is the generic login failure (PRD 9.1.2): the same
 // message for unknown email and wrong password — no hints for attackers.
-var ErrInvalidCredentials = &userError{
-    status:  http.StatusUnauthorized,
-    code:    httpx.CodeUnauthorized,
-    message: "invalid credentials",
+var ErrInvalidCredentials = &httpx.UserError{
+    Status:  http.StatusUnauthorized,
+    Code:    httpx.CodeUnauthorized,
+    Message: "invalid credentials",
 }
 
 // LoginInput is the request body for POST /api/v1/auth/login.
@@ -141,10 +141,10 @@ func (s *Service) Me(ctx context.Context, userID uuid.UUID) (MeResult, error) {
         `SELECT id, name, email FROM users WHERE id = $1`, userID,
     ).Scan(&user.ID, &user.Name, &user.Email)
     if errors.Is(err, pgx.ErrNoRows) {
-        return MeResult{}, &userError{
-            status:  http.StatusUnauthorized,
-            code:    httpx.CodeUnauthorized,
-            message: "user no longer exists",
+        return MeResult{}, &httpx.UserError{
+            Status:  http.StatusUnauthorized,
+            Code:    httpx.CodeUnauthorized,
+            Message: "user no longer exists",
         }
     }
     if err != nil {
@@ -186,7 +186,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
     var in LoginInput
     if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeBaqRequest, "invalid JSON body")
+        httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
         return
     }
     if strings.TrimSpace(in.Email) == "" || in.Password == "" {
@@ -196,9 +196,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
     res, err := h.svc.Login(r.Context(), in)
     if err != nil {
-        var uerr *userError
+        var uerr *httpx.UserError
         if errors.As(err, &uerr) {
-            httpx.Error(w, uerr.status, uerr.code, uerr.message)
+            httpx.Error(w, uerr.Status, uerr.Code, uerr.Message)
             return
         }
         h.log.Error("login failed", "error", err)
@@ -220,7 +220,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Me handles GET /api/v1/auth/me (requires a valid access token).
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-    userID, ok := UserIDFrom(r.Context())
+    userID, ok := httpx.UserIDFrom(r.Context())
     if !ok {
         // Should never happen: RequireAuth runs before this handler.
         httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "missing auth context")
@@ -229,9 +229,9 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 
     res, err := h.svc.Me(r.Context(), userID)
     if err != nil {
-        var uerr *userError
+        var uerr *httpx.UserError
         if errors.As(err, &uerr) {
-            httpx.Error(w, uerr.status, uerr.code, uerr.message)
+            httpx.Error(w, uerr.Status, uerr.Code, uerr.Message)
             return
         }
         h.log.Error("me failed", "error", err)

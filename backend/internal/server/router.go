@@ -2,20 +2,21 @@
 package server
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"net/http"
-	"time"
+    "context"
+    "encoding/json"
+    "fmt"
+    "log/slog"
+    "net/http"
+    "time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/jackc/pgx/v5/pgxpool"
+    "github.com/go-chi/chi/v5"
+    "github.com/go-chi/chi/v5/middleware"
+    "github.com/go-chi/cors"
+    "github.com/jackc/pgx/v5/pgxpool"
 
-	"linkpulse/internal/auth"
-	"linkpulse/internal/config"
+    "linkpulse/internal/auth"
+    "linkpulse/internal/config"
+    "linkpulse/internal/tenant"
 )
 
 // NewRouter builds the chi router with all global middleware and routes.
@@ -53,10 +54,13 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
     })
     authHandler := auth.NewHandler(authSvc, logger)
 
-    // Public API v1.
+    tenantSvc := tenant.NewService(db, logger)
+    tenantHandler := tenant.NewHandler(tenantSvc, logger)
+
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
-            // Public endpoints.
+            // Public endpoints. Refresh & logout authenticate via the
+            // refresh-token cookie, not a Bearer token.
             r.Post("/register", authHandler.Register)
             r.Post("/login", authHandler.Login)
             r.Post("/refresh", authHandler.Refresh)
@@ -66,6 +70,26 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
             r.Group(func(r chi.Router) {
                 r.Use(authSvc.RequireAuth)
                 r.Get("/me", authHandler.Me)
+            })
+        })
+
+        // Authenticated, workspace-scoped routes.
+        r.Group(func(r chi.Router) {
+            r.Use(authSvc.RequireAuth)
+
+            r.Route("/tenants", func(r chi.Router) {
+                // Collection endpoints (no tenant in the URL yet).
+                r.Post("/", tenantHandler.Create)
+                r.Get("/", tenantHandler.List)
+
+                r.Route("/{tenantId}", func(r chi.Router) {
+                    // Membership gate: everything below requires the
+                    // caller to be a member of this workspace.
+                    r.Use(tenantSvc.RequireMembership())
+
+                    r.Get("/", tenantHandler.Get)
+                    r.Patch("/", tenantHandler.Update)
+                })
             })
         })
     })
@@ -93,7 +117,10 @@ func handleReadyz(db *pgxpool.Pool) http.HandlerFunc {
     }
 }
 
-// requestLogger logs one structured line per request (PRD 18.1).
+// requestLogger logs one line per request (PRD 18.1). The human-readable
+// summary (method, path, status, duration) is the message so the console
+// stays one short line; the request ID rides along as a structured
+// attribute for the JSON file log.
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

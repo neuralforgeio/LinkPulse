@@ -16,10 +16,10 @@ import (
 // ErrInvalidSession is the generic refresh failure. The exact reason
 // (missing, expired, rotated out, revoked) is never revealed to the
 // client — only to the server log.
-var ErrInvalidSession = &userError{
-    status:  http.StatusUnauthorized,
-    code:    httpx.CodeInvalidToken,
-    message: "invalid session",
+var ErrInvalidSession = &httpx.UserError{
+    Status:  http.StatusUnauthorized,
+    Code:    httpx.CodeInvalidToken,
+    Message: "invalid session",
 }
 
 // reuseError signals that an already-revoked refresh token was replayed.
@@ -170,9 +170,9 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
             httpx.Error(w, http.StatusUnauthorized, httpx.CodeInvalidToken, "invalid session")
             return
         }
-        var uerr *userError
+        var uerr *httpx.UserError
         if errors.As(err, &uerr) {
-            httpx.Error(w, uerr.status, uerr.code, uerr.message)
+            httpx.Error(w, uerr.Status, uerr.Code, uerr.Message)
             return
         }
         h.log.Error("refresh failed", "error", err)

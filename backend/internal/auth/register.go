@@ -1,36 +1,34 @@
 package auth
 
 import (
-    "context"
-    "crypto/rand"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "log/slog"
-    "net/http"
-    "regexp"
-    "strings"
-    "time"
-    "unicode"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+	"unicode"
 
-    "github.com/google/uuid"
-    "github.com/jackc/pgx/v5"
-    "github.com/jackc/pgx/v5/pgconn"
-    "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-    "linkpulse/internal/httpx"
-    "linkpulse/internal/tenant"
+	"linkpulse/internal/httpx"
+	"linkpulse/internal/tenant"
 )
 
 // uniqueViolation is PostgreSQL's error code for a UNIQUE constraint hit.
 const uniqueViolation = "23505"
 
-// ServiceConfig carries auth-specific settings from the environment
+// ServiceConfig carries auth-specific settings from the environment.
 type ServiceConfig struct {
-    JWTSecret       string
-    AccessTTL       time.Duration
-    RefreshTTL      time.Duration
-    CookieSecure    bool
+    JWTSecret    string
+    AccessTTL    time.Duration
+    RefreshTTL   time.Duration
+    CookieSecure bool
 }
 
 // Service holds dependencies for auth flows.
@@ -80,20 +78,11 @@ type RegisterResult struct {
     Tenant TenantOut `json:"tenant"`
 }
 
-// userError marks errors that map to a 4xx response instead of a 500.
-type userError struct {
-    status  int
-    code    string
-    message string
-}
-
-func (e *userError) Error() string { return e.message }
-
 // ErrEmailTaken maps to 409 CONFLICT (PRD section 15).
-var ErrEmailTaken = &userError{
-    status:  http.StatusConflict,
-    code:    httpx.CodeConflict,
-    message: "email is already registered",
+var ErrEmailTaken = &httpx.UserError{
+    Status:  http.StatusConflict,
+    Code:    httpx.CodeConflict,
+    Message: "email is already registered",
 }
 
 var emailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
@@ -143,9 +132,10 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (RegisterResul
         return RegisterResult{}, fmt.Errorf("insert user: %w", err)
     }
 
-    // Default workspace: "{name}'s Workspace" (PRD 9.1.1).
+    // Default workspace: "{name}'s Workspace" (PRD 9.1.1). Slug generation
+    // lives in the tenant module, its rightful home.
     tenantName := name + "'s Workspace"
-    slug, err := uniqueSlug(ctx, tx, tenantName)
+    slug, err := tenant.UniqueSlug(ctx, tx, tenant.Slugify(tenantName))
     if err != nil {
         return RegisterResult{}, fmt.Errorf("generate slug: %w", err)
     }
@@ -175,46 +165,6 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (RegisterResul
         User:   UserOut{ID: userID, Name: name, Email: email},
         Tenant: TenantOut{ID: tenantID, Name: tenantName, Slug: slug},
     }, nil
-}
-
-// uniqueSlug returns a slug for the tenant name, appending a short random
-// suffix when the clean version is already taken (slugs are globally
-// unique). Retries a few times before giving up.
-func uniqueSlug(ctx context.Context, tx pgx.Tx, name string) (string, error) {
-    base := tenant.Slugify(name)
-    slug := base
-    for attempt := 0; attempt < 3; attempt++ {
-        var taken bool
-        err := tx.QueryRow(ctx,
-            `SELECT EXISTS (SELECT 1 FROM tenants WHERE slug = $1)`, slug,
-        ).Scan(&taken)
-        if err != nil {
-            return "", fmt.Errorf("check slug: %w", err)
-        }
-        if !taken {
-            return slug, nil
-        }
-        suffix, err := randomSuffix(4)
-        if err != nil {
-            return "", err
-        }
-        slug = base + "-" + suffix
-    }
-    return "", errors.New("could not build a unique slug")
-}
-
-// randomSuffix returns n random lowercase alphanumeric characters.
-func randomSuffix(n int) (string, error) {
-    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-    raw := make([]byte, n)
-    if _, err := rand.Read(raw); err != nil {
-        return "", fmt.Errorf("read random bytes: %w", err)
-    }
-    out := make([]byte, n)
-    for i, v := range raw {
-        out[i] = alphabet[int(v)%len(alphabet)]
-    }
-    return string(out), nil
 }
 
 // validate enforces the register rules (PRD 9.1.1) and returns a list of
@@ -283,7 +233,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
     var in RegisterInput
     if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeBaqRequest, "invalid JSON body")
+        httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
         return
     }
 
@@ -294,9 +244,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
     res, err := h.svc.Register(r.Context(), in)
     if err != nil {
-        var uerr *userError
+        var uerr *httpx.UserError
         if errors.As(err, &uerr) {
-            httpx.Error(w, uerr.status, uerr.code, uerr.message)
+            httpx.Error(w, uerr.Status, uerr.Code, uerr.Message)
             return
         }
         // Unexpected failure: log the details, return a generic message.

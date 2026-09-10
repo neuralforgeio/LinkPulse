@@ -17,6 +17,7 @@ import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FadeIn } from "@/components/motion/fade";
 import { CountUp } from "@/components/motion/count-up";
+import { useAuth } from "@/components/auth/auth-provider";
 
 const bars = [
   26, 40, 33, 52, 46, 60, 38, 68, 55, 64, 72, 50, 78, 66, 58, 86, 74, 62, 90,
@@ -61,6 +62,10 @@ function BentoCell({
 }
 
 export default function Home() {
+  // Adapt CTAs to the visitor's session state.
+  const { status } = useAuth();
+  const signedIn = status === "authenticated";
+
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const glowX = useSpring(mouseX, { stiffness: 55, damping: 18 });
@@ -112,18 +117,29 @@ export default function Home() {
         <FadeIn y={-12} delay={0.1}>
           <nav className="flex items-center gap-4 text-sm">
             <ThemeToggle />
-            <Link
-              href="/login"
-              className="text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-full bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-            >
-              Get started
-            </Link>
+            {signedIn ? (
+              <Link
+                href="/app/overview"
+                className="rounded-full bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+              >
+                Go to dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/register"
+                  className="rounded-full bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                >
+                  Get started
+                </Link>
+              </>
+            )}
           </nav>
         </FadeIn>
       </header>
@@ -160,17 +176,17 @@ export default function Home() {
             <FadeIn delay={0.4}>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link
-                  href="/register"
+                  href={signedIn ? "/app/overview" : "/register"}
                   className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-teal-400"
                 >
-                  Create your first link
+                  {signedIn ? "Open your dashboard" : "Create your first link"}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
-                  href="/login"
+                  href={signedIn ? "/app/overview" : "/login"}
                   className="rounded-full border border-slate-300 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
                 >
-                  Sign in
+                  {signedIn ? "Dashboard" : "Sign in"}
                 </Link>
               </div>
             </FadeIn>
@@ -481,17 +497,17 @@ export default function Home() {
                 </p>
                 <div className="mt-7 flex justify-center gap-4">
                   <Link
-                    href="/register"
+                    href={signedIn ? "/app/overview" : "/register"}
                     className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-teal-400"
                   >
-                    Get started
+                    {signedIn ? "Go to dashboard" : "Get started"}
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    href="/login"
+                    href={signedIn ? "/app/overview" : "/login"}
                     className="rounded-full border border-slate-300 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500"
                   >
-                    Sign in
+                    {signedIn ? "Dashboard" : "Sign in"}
                   </Link>
                 </div>
               </div>
