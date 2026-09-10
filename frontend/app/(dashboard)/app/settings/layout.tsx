@@ -4,7 +4,7 @@ const TABS = [
   { label: "Members", href: "/app/settings/members", enabled: true },
   { label: "General", href: null, enabled: false },
   { label: "Profile", href: null, enabled: false },
-  { label: "API Keys", href: null, enabled: false },
+  { label: "API Keys", href: "/app/settings/api-keys", enabled: true },
 ];
 
 export default function SettingsLayout({

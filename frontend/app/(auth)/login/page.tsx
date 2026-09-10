@@ -11,9 +11,6 @@ import { Input } from "@/components/ui/input";
 import { FadeIn } from "@/components/motion/fade";
 import { useAuth } from "@/components/auth/auth-provider";
 
-// The "next" param (e.g. ?next=/invite/INV-ABC) sends the user back to
-// where they were heading before the login wall. Only same-app paths
-// are allowed — never an external URL (open-redirect protection).
 function nextRedirect(): string {
   const next = new URLSearchParams(window.location.search).get("next");
   if (next && next.startsWith("/") && !next.startsWith("//")) {
@@ -33,7 +30,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
 
-  // Already signed in? Skip the form.
   useEffect(() => {
     if (status === "authenticated") {
       router.replace(nextRedirect());
@@ -42,7 +38,7 @@ export default function LoginPage() {
 
   function fail(message: string) {
     setError(message);
-    setShakeKey((k) => k + 1); // replays the shake animation
+    setShakeKey((k) => k + 1);
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -72,10 +68,10 @@ export default function LoginPage() {
   return (
     <div>
       <FadeIn>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Welcome back
         </h1>
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           Sign in to your LinkPulse workspace.
         </p>
       </FadeIn>
@@ -105,7 +101,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
+                className="text-zinc-400 transition hover:text-zinc-600 dark:hover:text-zinc-300"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -124,7 +120,7 @@ export default function LoginPage() {
             animate={{ opacity: 1, x: [0, -10, 10, -6, 6, -2, 0] }}
             transition={{ duration: 0.4 }}
           >
-            <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
               {error}
             </p>
           </motion.div>
@@ -138,11 +134,11 @@ export default function LoginPage() {
       </form>
 
       <FadeIn delay={0.32}>
-        <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
           New to LinkPulse?{" "}
           <Link
             href="/register"
-            className="font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
+            className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
           >
             Create an account
           </Link>

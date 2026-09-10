@@ -1,4 +1,3 @@
-// Package server wires the HTTP router, middleware, and route handlers.
 package server
 
 import (
@@ -15,10 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"linkpulse/internal/analytics"
+	"linkpulse/internal/apikey"
 	"linkpulse/internal/auth"
 	"linkpulse/internal/clickbuffer"
 	"linkpulse/internal/config"
 	"linkpulse/internal/link"
+	"linkpulse/internal/publicapi"
 	"linkpulse/internal/redirect"
 	"linkpulse/internal/tenant"
 )
@@ -73,6 +74,11 @@ func NewRouter(
     analyticsSvc := analytics.NewService(db, logger)
     analyticsHandler := analytics.NewHandler(analyticsSvc, logger)
 
+    apikeySvc := apikey.NewService(db, logger)
+    apikeyHandler := apikey.NewHandler(apikeySvc, logger)
+
+    publicHandler := publicapi.NewHandler(db, linkSvc, logger)
+
     redirectSvc := redirect.NewService(db)
     redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, cfg.FrontendOrigin)
 
@@ -80,8 +86,32 @@ func NewRouter(
     // (healthz, api) always win over this parameter route.
     r.Get("/{code}", redirectHandler.Resolve)
 
+    // Public API (PRD 9.8): authenticated by API keys, not sessions.
+    // The required scope IS the authorization.
+    r.Route("/api/v1/public", func(r chi.Router) {
+        r.Use(apikeySvc.RequireKey)
+
+        r.Group(func(r chi.Router) {
+            r.Use(apikeySvc.RequireScope(apikey.ScopeLinksRead))
+            r.Get("/links", publicHandler.ListLinks)
+            r.Get("/links/{shortCode}", publicHandler.GetLink)
+        })
+        r.Group(func(r chi.Router) {
+            r.Use(apikeySvc.RequireScope(apikey.ScopeLinksWrite))
+            r.Post("/links", publicHandler.CreateLink)
+            r.Patch("/links/{shortCode}", publicHandler.UpdateLink)
+            r.Delete("/links/{shortCode}", publicHandler.DeleteLink)
+        })
+        r.Group(func(r chi.Router) {
+            r.Use(apikeySvc.RequireScope(apikey.ScopeAnalyticsRead))
+            r.Get("/links/{shortCode}/analytics", publicHandler.LinkAnalytics)
+        })
+    })
+
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
+            // Public endpoints. Refresh & logout authenticate via the
+            // refresh-token cookie, not a Bearer token.
             r.Post("/register", authHandler.Register)
             r.Post("/login", authHandler.Login)
             r.Post("/refresh", authHandler.Refresh)
@@ -97,28 +127,42 @@ func NewRouter(
         r.Group(func(r chi.Router) {
             r.Use(authSvc.RequireAuth)
 
+            // The invite code itself identifies the workspace, so
+            // accepting is not tenant-scoped (PRD 9.3.2).
             r.Post("/invitations/accept", tenantHandler.AcceptInvite)
 
             r.Route("/tenants", func(r chi.Router) {
+                // Collection endpoints (no tenant in the URL yet).
                 r.Post("/", tenantHandler.Create)
                 r.Get("/", tenantHandler.List)
 
                 r.Route("/{tenantId}", func(r chi.Router) {
+                    // Membership gate: everything below requires the
+                    // caller to be a member of this workspace.
                     r.Use(tenantSvc.RequireMembership())
 
                     r.Get("/", tenantHandler.Get)
                     r.Patch("/", tenantHandler.Update)
 
+                    // Members (PRD 9.3.3–9.3.5).
                     r.Get("/members", tenantHandler.ListMembers)
                     r.Patch("/members/{userId}", tenantHandler.UpdateMemberRole)
                     r.Delete("/members/{userId}", tenantHandler.RemoveMember)
                     r.Post("/leave", tenantHandler.Leave)
 
+                    // Invitations (PRD 9.3.1).
                     r.Post("/invitations", tenantHandler.CreateInvite)
 
                     // Analytics (PRD 9.6) — viewable by every member.
                     r.Get("/analytics/overview", analyticsHandler.Overview)
 
+                    // API keys (PRD 9.7) — role checked in the handler.
+                    r.Post("/api-keys", apikeyHandler.Create)
+                    r.Get("/api-keys", apikeyHandler.List)
+                    r.Delete("/api-keys/{keyId}", apikeyHandler.Revoke)
+
+                    // Links (PRD 9.4). Reading is open to every member;
+                    // write endpoints check the role inside the handler.
                     r.Route("/links", func(r chi.Router) {
                         r.Get("/", linkHandler.List)
                         r.Post("/", linkHandler.Create)
@@ -161,6 +205,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
             ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
+            // PRD 18.2: return the request ID in the response header.
             if reqID := middleware.GetReqID(r.Context()); reqID != "" {
                 ww.Header().Set("X-Request-Id", reqID)
             }

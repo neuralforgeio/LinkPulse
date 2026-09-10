@@ -29,7 +29,6 @@ export default function RegisterPage() {
     setShakeKey((k) => k + 1);
   }
 
-  // Mirrors the backend rules (PRD 9.1.1) for instant feedback.
   function validate(): string[] {
     const problems: string[] = [];
     if (name.trim().length < 2) {
@@ -84,7 +83,7 @@ export default function RegisterPage() {
         transition={{ type: "spring", stiffness: 260, damping: 22 }}
         className="text-center"
       >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
           <svg
             viewBox="0 0 24 24"
             className="h-8 w-8"
@@ -102,12 +101,12 @@ export default function RegisterPage() {
             />
           </svg>
         </div>
-        <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Account created
         </h1>
-        <p className="mt-2 text-slate-500 dark:text-slate-400">
+        <p className="mt-2 text-zinc-500 dark:text-zinc-400">
           Welcome aboard,{" "}
-          <span className="font-medium text-slate-700 dark:text-slate-200">
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">
             {done.user.name}
           </span>
           .
@@ -116,17 +115,17 @@ export default function RegisterPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
-          className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300"
+          className="mt-4 rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
         >
           Your workspace{" "}
-          <span className="font-semibold text-slate-800 dark:text-white">
+          <span className="font-semibold text-zinc-800 dark:text-white">
             &ldquo;{done.tenant.name}&rdquo;
           </span>{" "}
           is ready.
         </motion.p>
         <Link
           href="/login"
-          className="mt-6 flex w-full items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-teal-400"
+          className="mt-6 flex w-full items-center justify-center rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Continue to sign in
         </Link>
@@ -137,10 +136,10 @@ export default function RegisterPage() {
   return (
     <div>
       <FadeIn>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Create your account
         </h1>
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           Your workspace is one minute away.
         </p>
       </FadeIn>
@@ -182,7 +181,7 @@ export default function RegisterPage() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-300"
+                className="text-zinc-400 transition hover:text-zinc-600 dark:hover:text-zinc-300"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -201,7 +200,7 @@ export default function RegisterPage() {
             animate={{ opacity: 1, x: [0, -10, 10, -6, 6, -2, 0] }}
             transition={{ duration: 0.4 }}
           >
-            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
               <ul className="list-disc space-y-1 pl-4">
                 {errors.map((problem) => (
                   <li key={problem}>{problem}</li>
@@ -219,11 +218,11 @@ export default function RegisterPage() {
       </form>
 
       <FadeIn delay={0.4}>
-        <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
+            className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
           >
             Sign in
           </Link>
