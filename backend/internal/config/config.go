@@ -17,7 +17,7 @@ type Config struct {
     JWTRefreshTTL  time.Duration
     LogLevel       string
     LogFormat      string
-    LogFile        string
+    LogDir        string
 }
 
 // Load reads configuration from the environment with development defaults.
@@ -33,7 +33,7 @@ func Load() Config {
         JWTRefreshTTL:  getEnvDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
         LogLevel:       getEnv("LOG_LEVEL", "info"),
         LogFormat:      getEnv("LOG_FORMAT", "pretty"),
-        LogFile:        getEnv("LOG_FILE", "logs/linkpulse.log"),
+        LogDir:         getEnv("LOG_DIR", "logs"),
     }
 }
 

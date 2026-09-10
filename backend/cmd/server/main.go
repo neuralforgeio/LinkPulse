@@ -29,7 +29,7 @@ func main() {
     logger := logutil.New(logutil.Options{
         Level:  cfg.LogLevel,
         Format: cfg.LogFormat,
-        File:   cfg.LogFile,
+        Dir:    cfg.LogDir,
     })
     slog.SetDefault(logger)
 

@@ -1,18 +1,17 @@
 package logutil
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "strings"
-    "sync"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
-    "log/slog"
-
-    "gopkg.in/natefinch/lumberjack.v2"
+	"log/slog"
 )
 
 // ANSI escape codes. Set NO_COLOR=1 to disable (CI, piping to files).
@@ -31,14 +30,7 @@ func colorize(code, s string) string {
     if noColor {
         return s
     }
-    return code + s + reset()
-}
-
-func reset() string {
-    if noColor {
-        return ""
-    }
-    return ansiReset
+    return code + s + ansiReset
 }
 
 func levelColor(l slog.Level) string {
@@ -57,8 +49,6 @@ func levelColor(l slog.Level) string {
 // PrettyHandler renders one short, colored line per record:
 //
 //	19:12:10 INFO  POST /api/v1/auth/login → 200 (51ms) request_id=…
-//
-// The date is omitted on purpose — it lives in the JSON file log.
 type PrettyHandler struct {
     mu    sync.Mutex
     w     io.Writer
@@ -80,10 +70,8 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 
     b.WriteString(colorize(ansiDim, r.Time.Format("15:04:05")))
     b.WriteByte(' ')
-
     b.WriteString(colorize(levelColor(r.Level), fmt.Sprintf("%-5s", r.Level.String())))
     b.WriteByte(' ')
-
     b.WriteString(r.Message)
 
     for _, a := range h.attrs {
@@ -109,7 +97,6 @@ func (h *PrettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
     }
 }
 
-// WithGroup is not used by this app; pass through unchanged.
 func (h *PrettyHandler) WithGroup(string) slog.Handler { return h }
 
 func appendAttr(b *strings.Builder, a slog.Attr) {
@@ -118,15 +105,13 @@ func appendAttr(b *strings.Builder, a slog.Attr) {
     }
     b.WriteByte(' ')
     if a.Key == "error" {
-        // Errors deserve attention: always red.
         b.WriteString(colorize(ansiRed, fmt.Sprintf("%s=%v", a.Key, a.Value)))
         return
     }
     b.WriteString(colorize(ansiDim, fmt.Sprintf("%s=%v", a.Key, a.Value)))
 }
 
-// MultiHandler fans every record out to all wrapped handlers
-// (console + file), so one log call lands in both places.
+// MultiHandler fans every record out to all wrapped handlers.
 type MultiHandler struct {
     handlers []slog.Handler
 }
@@ -177,15 +162,14 @@ func (m *MultiHandler) WithGroup(name string) slog.Handler {
 type Options struct {
     // Level: debug | info | warn | error (default info).
     Level string
-    // Console format: pretty | json (default pretty). Production runs
-    // json on the console; the file is always JSON.
+    // Console format: pretty | json (default pretty).
     Format string
-    // File path for the rotating JSON log. Empty disables file logging.
-    File string
+    // Dir for daily JSON logs. Empty disables file logging.
+    Dir string
 }
 
 // New builds the root logger: a colored console handler for humans and,
-// when File is set, a rotating JSON file handler for history.
+// when Dir is set, daily JSON files for history.
 func New(opts Options) *slog.Logger {
     level := parseLevel(opts.Level)
 
@@ -196,27 +180,83 @@ func New(opts Options) *slog.Logger {
 
     handlers := []slog.Handler{console}
 
-    if opts.File != "" {
-        if err := os.MkdirAll(filepath.Dir(opts.File), 0o755); err != nil {
-            // Bootstrap-time warning: the logger itself is not ready yet.
-            fmt.Fprintf(os.Stderr, "logutil: cannot create log directory: %v\n", err)
-        } else {
-            handlers = append(handlers, slog.NewJSONHandler(newRotatingWriter(opts.File), &slog.HandlerOptions{Level: level}))
-        }
+    if opts.Dir != "" {
+        handlers = append(handlers,
+            slog.NewJSONHandler(newDailyWriter(opts.Dir), &slog.HandlerOptions{Level: level}))
     }
 
     return slog.New(NewMulti(handlers...))
 }
 
-// newRotatingWriter returns a size-rotating writer: 10 MB per file,
-// 5 backups kept, older files gzip-compressed.
-func newRotatingWriter(path string) io.Writer {
-    return &lumberjack.Logger{
-        Filename:   path,
-        MaxSize:    10,
-        MaxBackups: 5,
-        Compress:   true,
+// dailyFileWriter writes to <dir>/linkpulse-YYYY-MM-DD.log, switching
+// files at the first write after midnight and pruning files older than
+// 30 days. One file per day keeps history easy to browse and files small.
+type dailyFileWriter struct {
+    mu   sync.Mutex
+    dir  string
+    day  string
+    file *os.File
+}
+
+func newDailyWriter(dir string) *dailyFileWriter {
+    return &dailyFileWriter{dir: dir}
+}
+
+func (w *dailyFileWriter) Write(p []byte) (int, error) {
+    w.mu.Lock()
+    defer w.mu.Unlock()
+
+    today := time.Now().Format("2006-01-02")
+    if w.file == nil || today != w.day {
+        if err := w.rotate(today); err != nil {
+            return 0, err
+        }
     }
+    return w.file.Write(p)
+}
+
+func (w *dailyFileWriter) rotate(day string) error {
+    if w.file != nil {
+        _ = w.file.Close()
+    }
+    if err := os.MkdirAll(w.dir, 0o755); err != nil {
+        return fmt.Errorf("create log dir: %w", err)
+    }
+    f, err := os.OpenFile(filepath.Join(w.dir, "linkpulse-"+day+".log"),
+        os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+    if err != nil {
+        return fmt.Errorf("open log file: %w", err)
+    }
+    w.file = f
+    w.day = day
+    w.prune(30)
+    return nil
+}
+
+// prune deletes daily logs older than keepDays days.
+func (w *dailyFileWriter) prune(keepDays int) {
+    entries, err := os.ReadDir(w.dir)
+    if err != nil {
+        return
+    }
+    cutoff := time.Now().AddDate(0, 0, -keepDays).Format("2006-01-02")
+    for _, entry := range entries {
+        name := entry.Name()
+        day := strings.TrimSuffix(strings.TrimPrefix(name, "linkpulse-"), ".log")
+        if len(day) == 10 && day < cutoff {
+            _ = os.Remove(filepath.Join(w.dir, name))
+        }
+    }
+}
+
+// Close flushes and closes the current file, if any.
+func (w *dailyFileWriter) Close() error {
+    w.mu.Lock()
+    defer w.mu.Unlock()
+    if w.file == nil {
+        return nil
+    }
+    return w.file.Close()
 }
 
 func parseLevel(s string) slog.Level {
