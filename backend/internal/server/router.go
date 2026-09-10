@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+    "github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"linkpulse/internal/auth"
@@ -25,6 +26,18 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
     r.Use(middleware.RealIP)
     r.Use(requestLogger(logger))
     r.Use(middleware.Recoverer)
+
+    // CORS: allow ONLY our frontend origin. The origin list is explicit —
+    // a wildcard combined with AllowCredentials would let ANY site send
+    // credentialed requests (PRD 16.17; also a red line in the protocol).
+    r.Use(cors.Handler(cors.Options{
+        AllowedOrigins:   []string{cfg.FrontendOrigin},
+        AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+        AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
+        ExposedHeaders:   []string{"X-Request-Id"},
+        AllowCredentials: true,
+        MaxAge:           300,
+    }))
 
     // Health probes (PRD 18.3).
     r.Get("/healthz", handleHealthz)
