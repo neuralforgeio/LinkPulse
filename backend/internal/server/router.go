@@ -4,13 +4,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-    "github.com/go-chi/cors"
+	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"linkpulse/internal/auth"
@@ -107,12 +108,10 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
             next.ServeHTTP(ww, r)
 
-            logger.Info("http request",
+            logger.Info(
+                fmt.Sprintf("%s %s → %d (%dms)",
+                    r.Method, r.URL.Path, ww.Status(), time.Since(start).Milliseconds()),
                 "request_id", middleware.GetReqID(r.Context()),
-                "method", r.Method,
-                "path", r.URL.Path,
-                "status", ww.Status(),
-                "duration_ms", time.Since(start).Milliseconds(),
             )
         })
     }

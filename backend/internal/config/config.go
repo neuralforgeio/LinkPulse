@@ -1,8 +1,8 @@
 package config
 
 import (
-    "os"
-    "time"
+	"os"
+	"time"
 )
 
 // Config holds all runtime configuration for the LinkPulse backend.
@@ -17,6 +17,7 @@ type Config struct {
     JWTRefreshTTL  time.Duration
     LogLevel       string
     LogFormat      string
+    LogFile        string
 }
 
 // Load reads configuration from the environment with development defaults.
@@ -31,7 +32,8 @@ func Load() Config {
         JWTAccessTTL:   getEnvDuration("JWT_ACCESS_TTL", 15*time.Minute),
         JWTRefreshTTL:  getEnvDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
         LogLevel:       getEnv("LOG_LEVEL", "info"),
-        LogFormat:      getEnv("LOG_FORMAT", "text"),
+        LogFormat:      getEnv("LOG_FORMAT", "pretty"),
+        LogFile:        getEnv("LOG_FILE", "logs/linkpulse.log"),
     }
 }
 
