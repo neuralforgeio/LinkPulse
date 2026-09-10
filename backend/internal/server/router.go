@@ -1,3 +1,4 @@
+// Package server wires the HTTP router, middleware, and route handlers.
 package server
 
 import (
@@ -18,8 +19,10 @@ import (
 	"linkpulse/internal/auth"
 	"linkpulse/internal/clickbuffer"
 	"linkpulse/internal/config"
+	"linkpulse/internal/httpx"
 	"linkpulse/internal/link"
 	"linkpulse/internal/publicapi"
+	"linkpulse/internal/ratelimit"
 	"linkpulse/internal/redirect"
 	"linkpulse/internal/tenant"
 )
@@ -40,14 +43,12 @@ func NewRouter(
     r.Use(requestLogger(logger))
     r.Use(middleware.Recoverer)
 
-    // CORS: allow ONLY our frontend origin. The origin list is explicit —
-    // a wildcard combined with AllowCredentials would let ANY site send
-    // credentialed requests (PRD 16.17; also a red line in the protocol).
+    // CORS: allow ONLY our frontend origin.
     r.Use(cors.Handler(cors.Options{
         AllowedOrigins:   []string{cfg.FrontendOrigin},
         AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
         AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
-        ExposedHeaders:   []string{"X-Request-Id"},
+        ExposedHeaders:   []string{"X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
         AllowCredentials: true,
         MaxAge:           300,
     }))
@@ -55,6 +56,20 @@ func NewRouter(
     // Health probes (PRD 18.3).
     r.Get("/healthz", handleHealthz)
     r.Get("/readyz", handleReadyz(db))
+
+    // Rate limiters (PRD 9.9). A limit of 0 disables a limiter — the
+    // switch used when RATE_LIMIT_ENABLED=false.
+    rlLimit := func(n int) int {
+        if cfg.RateLimitEnabled {
+            return n
+        }
+        return 0
+    }
+    redirectRL := ratelimit.New(rlLimit(cfg.RateLimitRedirectPerMinute), time.Minute)
+    loginRL := ratelimit.New(rlLimit(cfg.RateLimitLoginPerMinute), time.Minute)
+    registerRL := ratelimit.New(rlLimit(cfg.RateLimitRegisterPerMinute), time.Minute)
+    publicRL := ratelimit.New(rlLimit(cfg.RateLimitPublicAPIPerMinute), time.Minute)
+    dashboardRL := ratelimit.New(rlLimit(cfg.RateLimitDashboardPerMinute), time.Minute)
 
     // Feature handlers.
     authSvc := auth.NewService(db, auth.ServiceConfig{
@@ -82,14 +97,19 @@ func NewRouter(
     redirectSvc := redirect.NewService(db)
     redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, cfg.FrontendOrigin)
 
-    // Public redirect engine: GET /{code} (PRD 9.5). Static routes
-    // (healthz, api) always win over this parameter route.
-    r.Get("/{code}", redirectHandler.Resolve)
+    // Public redirect engine: GET /{code}, IP rate limited (PRD 9.5, 9.9).
+    r.With(redirectRL.Middleware(ratelimit.KeyIP)).
+        Get("/{code}", redirectHandler.Resolve)
 
-    // Public API (PRD 9.8): authenticated by API keys, not sessions.
-    // The required scope IS the authorization.
+    // Public API (PRD 9.8): API-key authenticated, rate limited per key.
     r.Route("/api/v1/public", func(r chi.Router) {
         r.Use(apikeySvc.RequireKey)
+        r.Use(publicRL.Middleware(func(r *http.Request) string {
+            if a, ok := apikey.FromContext(r.Context()); ok {
+                return a.KeyID.String()
+            }
+            return ratelimit.KeyIP(r)
+        }))
 
         r.Group(func(r chi.Router) {
             r.Use(apikeySvc.RequireScope(apikey.ScopeLinksRead))
@@ -110,10 +130,10 @@ func NewRouter(
 
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
-            // Public endpoints. Refresh & logout authenticate via the
-            // refresh-token cookie, not a Bearer token.
-            r.Post("/register", authHandler.Register)
-            r.Post("/login", authHandler.Login)
+            // Login & register are IP rate limited — the brute-force
+            // guard (PRD 9.9). Attempts count, successes or not.
+            r.With(registerRL.Middleware(ratelimit.KeyIP)).Post("/register", authHandler.Register)
+            r.With(loginRL.Middleware(ratelimit.KeyIP)).Post("/login", authHandler.Login)
             r.Post("/refresh", authHandler.Refresh)
             r.Post("/logout", authHandler.Logout)
 
@@ -123,46 +143,41 @@ func NewRouter(
             })
         })
 
-        // Authenticated routes.
+        // Authenticated routes: rate limited per user (600/min).
         r.Group(func(r chi.Router) {
             r.Use(authSvc.RequireAuth)
+            r.Use(dashboardRL.Middleware(func(r *http.Request) string {
+                if id, ok := httpx.UserIDFrom(r.Context()); ok {
+                    return id.String()
+                }
+                return ratelimit.KeyIP(r)
+            }))
 
-            // The invite code itself identifies the workspace, so
-            // accepting is not tenant-scoped (PRD 9.3.2).
             r.Post("/invitations/accept", tenantHandler.AcceptInvite)
 
             r.Route("/tenants", func(r chi.Router) {
-                // Collection endpoints (no tenant in the URL yet).
                 r.Post("/", tenantHandler.Create)
                 r.Get("/", tenantHandler.List)
 
                 r.Route("/{tenantId}", func(r chi.Router) {
-                    // Membership gate: everything below requires the
-                    // caller to be a member of this workspace.
                     r.Use(tenantSvc.RequireMembership())
 
                     r.Get("/", tenantHandler.Get)
                     r.Patch("/", tenantHandler.Update)
 
-                    // Members (PRD 9.3.3–9.3.5).
                     r.Get("/members", tenantHandler.ListMembers)
                     r.Patch("/members/{userId}", tenantHandler.UpdateMemberRole)
                     r.Delete("/members/{userId}", tenantHandler.RemoveMember)
                     r.Post("/leave", tenantHandler.Leave)
 
-                    // Invitations (PRD 9.3.1).
                     r.Post("/invitations", tenantHandler.CreateInvite)
 
-                    // Analytics (PRD 9.6) — viewable by every member.
                     r.Get("/analytics/overview", analyticsHandler.Overview)
 
-                    // API keys (PRD 9.7) — role checked in the handler.
                     r.Post("/api-keys", apikeyHandler.Create)
                     r.Get("/api-keys", apikeyHandler.List)
                     r.Delete("/api-keys/{keyId}", apikeyHandler.Revoke)
 
-                    // Links (PRD 9.4). Reading is open to every member;
-                    // write endpoints check the role inside the handler.
                     r.Route("/links", func(r chi.Router) {
                         r.Get("/", linkHandler.List)
                         r.Post("/", linkHandler.Create)
@@ -205,7 +220,6 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
             ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-            // PRD 18.2: return the request ID in the response header.
             if reqID := middleware.GetReqID(r.Context()); reqID != "" {
                 ww.Header().Set("X-Request-Id", reqID)
             }

@@ -4,8 +4,8 @@
 package httpx
 
 import (
-    "encoding/json"
-    "net/http"
+	"encoding/json"
+	"net/http"
 )
 
 // Error codes (PRD section 15).
@@ -18,6 +18,7 @@ const (
     CodeUnauthorized    = "UNAUTHORIZED"
     CodeInvalidToken    = "INVALID_TOKEN"
     CodeInviteExpired   = "INVITE_EXPIRED"
+    CodeRateLimited     = "RATE_LIMITED"
     CodeInternalError   = "INTERNAL_ERROR"
 )
 
