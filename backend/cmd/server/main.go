@@ -5,6 +5,7 @@ import (
 	"errors"
 	"linkpulse/internal/config"
 	"linkpulse/internal/server"
+	"linkpulse/internal/store/postgres"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,17 +13,36 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	cfg := config.Load()
+
+	// Fail fast: no database URL, no point starting the server
+	if cfg.DatabaseURL == "" {
+		slog.Error("DATABASE_URL is required - set in backend/.env")
+		os.Exit(1)
+	}
 
 	logger := setupLogger(cfg)
 	slog.SetDefault(logger)
 
+	// Connect to PostgreSQL and verify it answers a ping
+	pool, err := postgres.New(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("cannot connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	slog.Info("database connected")
+
 	srv := &http.Server{
 		Addr: 				":" + cfg.AppPort,
-		Handler: 			server.NewRouter(logger),
+		Handler: 			server.NewRouter(logger, pool),
 		ReadTimeout: 	10 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout: 	60 * time.Second,

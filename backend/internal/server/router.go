@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -8,9 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewRouter(logger *slog.Logger) http.Handler {
+func NewRouter(logger *slog.Logger, db *pgxpool.Pool) http.Handler {
 	r := chi.NewRouter();
 
 	r.Use(middleware.RequestID) // assigns X-Request-Id header + context
@@ -21,11 +23,27 @@ func NewRouter(logger *slog.Logger) http.Handler {
 	// Livenses probe: is the process alive?
 	r.Get("/healthz", handleHealthz)
 
+	// Readiness probe: alive AND the database answers a ping
+	r.Get("/readyz", handleReadyz(db))
+
 	return r
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func handleReadyz(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := db.Ping(ctx); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_unreachable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	}
 }
 
 // requestLogger logs on structured line per request: request_id
