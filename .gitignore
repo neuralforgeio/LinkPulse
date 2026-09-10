@@ -16,3 +16,6 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# Logs
+backend/logs/
