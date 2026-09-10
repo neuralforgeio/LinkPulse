@@ -1,8 +1,11 @@
+// Package httpx contains shared HTTP helpers: the standard JSON response
+// envelope, error codes, and the UserError contract used by every API
+// handler (PRD section 15).
 package httpx
 
 import (
-	"encoding/json"
-	"net/http"
+    "encoding/json"
+    "net/http"
 )
 
 // Error codes (PRD section 15).
@@ -14,6 +17,7 @@ const (
     CodeNotFound        = "NOT_FOUND"
     CodeUnauthorized    = "UNAUTHORIZED"
     CodeInvalidToken    = "INVALID_TOKEN"
+    CodeInviteExpired   = "INVITE_EXPIRED"
     CodeInternalError   = "INTERNAL_ERROR"
 )
 

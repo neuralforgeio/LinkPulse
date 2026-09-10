@@ -73,9 +73,13 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
             })
         })
 
-        // Authenticated, workspace-scoped routes.
+        // Authenticated routes.
         r.Group(func(r chi.Router) {
             r.Use(authSvc.RequireAuth)
+
+            // The invite code itself identifies the workspace, so
+            // accepting is not tenant-scoped (PRD 9.3.2).
+            r.Post("/invitations/accept", tenantHandler.AcceptInvite)
 
             r.Route("/tenants", func(r chi.Router) {
                 // Collection endpoints (no tenant in the URL yet).
@@ -89,6 +93,15 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
 
                     r.Get("/", tenantHandler.Get)
                     r.Patch("/", tenantHandler.Update)
+
+                    // Members (PRD 9.3.3–9.3.5).
+                    r.Get("/members", tenantHandler.ListMembers)
+                    r.Patch("/members/{userId}", tenantHandler.UpdateMemberRole)
+                    r.Delete("/members/{userId}", tenantHandler.RemoveMember)
+                    r.Post("/leave", tenantHandler.Leave)
+
+                    // Invitations (PRD 9.3.1).
+                    r.Post("/invitations", tenantHandler.CreateInvite)
                 })
             })
         })
