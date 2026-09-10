@@ -11,6 +11,27 @@ import {
 } from "recharts";
 import type { TimePoint } from "./types";
 
+// Dates arrive as "YYYY-MM-DD" (UTC buckets from the backend).
+function shortDate(date: string): string {
+  return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function fullDate(date: string): string {
+  return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+// Tick label color that stays readable on both light and dark charts.
+const TICK = { fontSize: 11, fill: "#a1a1aa" };
+
 interface ClicksChartProps {
   data: TimePoint[];
   height?: number;
@@ -20,7 +41,7 @@ interface ClicksChartProps {
 export function ClicksChart({ data, height = 280 }: ClicksChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 p-10 text-sm text-slate-400 dark:border-slate-700">
+      <div className="flex items-center justify-center rounded-lg border border-dashed border-zinc-300 p-10 text-sm text-zinc-400 dark:border-zinc-700">
         No clicks in this period yet.
       </div>
     );
@@ -29,51 +50,57 @@ export function ClicksChart({ data, height = 280 }: ClicksChartProps) {
   return (
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <AreaChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <defs>
-            <linearGradient id="clicksFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+            <linearGradient id="lpClicksFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="currentColor"
-            className="text-slate-200 dark:text-slate-800"
             vertical={false}
+            stroke="currentColor"
+            className="text-zinc-200 dark:text-zinc-800"
           />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11 }}
-            stroke="currentColor"
-            className="text-slate-400"
+            tickFormatter={shortDate}
+            tick={TICK}
             tickLine={false}
             axisLine={false}
-            minTickGap={28}
+            minTickGap={16}
           />
           <YAxis
             allowDecimals={false}
-            tick={{ fontSize: 11 }}
-            stroke="currentColor"
-            className="text-slate-400"
+            tick={TICK}
             tickLine={false}
             axisLine={false}
-            width={32}
+            width={36}
           />
           <Tooltip
+            cursor={{ stroke: "#a1a1aa", strokeDasharray: "3 3" }}
             formatter={(value) => [`${value} clicks`, "Clicks"]}
+            labelFormatter={(label) => fullDate(String(label))}
             contentStyle={{
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
+              borderRadius: 10,
+              border: "1px solid #e4e4e7",
               fontSize: 12,
+              boxShadow: "0 4px 12px rgb(0 0 0 / 0.06)",
             }}
+            labelStyle={{ color: "#18181b", fontWeight: 600, marginBottom: 2 }}
+            itemStyle={{ color: "#71717a" }}
           />
           <Area
             type="monotone"
             dataKey="clicks"
-            stroke="#10b981"
+            stroke="#3b82f6"
             strokeWidth={2}
-            fill="url(#clicksFill)"
+            fill="url(#lpClicksFill)"
+            activeDot={{ r: 4, strokeWidth: 0 }}
           />
         </AreaChart>
       </ResponsiveContainer>

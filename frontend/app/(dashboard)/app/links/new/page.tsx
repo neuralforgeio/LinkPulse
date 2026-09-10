@@ -95,22 +95,20 @@ export default function NewLinkPage() {
     },
   });
 
-  // Viewers are read-only — the backend would reject them anyway, but a
-  // clear message beats a form that fights back.
   if (!canManage) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
+      <div className="mx-auto max-w-md rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">
           Read-only access
         </h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
           Your role in {active?.name} is{" "}
           <span className="font-medium">{myRole}</span> — only members and above
           can create links.
         </p>
         <Link
           href="/app/links"
-          className="mt-5 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
+          className="mt-5 inline-block text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
         >
           Back to links
         </Link>
@@ -137,7 +135,6 @@ export default function NewLinkPage() {
     a.click();
   }
 
-  // Mirrors the backend rules (PRD 9.4.1) for instant feedback.
   function validate(): string[] {
     const problems: string[] = [];
     const dest = destination.trim();
@@ -217,9 +214,9 @@ export default function NewLinkPage() {
           initial={{ opacity: 0, scale: 0.92, y: 24 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 22 }}
-          className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl dark:border-slate-800 dark:bg-slate-900"
+          className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400">
             <svg
               viewBox="0 0 24 24"
               className="h-8 w-8"
@@ -237,26 +234,26 @@ export default function NewLinkPage() {
               />
             </svg>
           </div>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
             Link created
           </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             {created.title || "Your link"} is live. Share it anywhere — every
             click gets counted.
           </p>
 
-          <div className="mt-5 rounded-2xl bg-slate-100 p-4 dark:bg-slate-950/60">
-            <p className="break-all font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-5 rounded-lg bg-zinc-100 p-4 dark:bg-zinc-950/60">
+            <p className="break-all font-mono text-lg font-bold text-blue-600 dark:text-blue-400">
               {created.short_url}
             </p>
             <button
               type="button"
               onClick={copyShortUrl}
-              className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-900"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
             >
               {copied ? (
                 <>
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-4 w-4 text-blue-600" />
                   Copied!
                 </>
               ) : (
@@ -273,7 +270,7 @@ export default function NewLinkPage() {
             <button
               type="button"
               onClick={downloadQr}
-              className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-400"
+              className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-500 dark:text-blue-400"
             >
               <Download className="h-4 w-4" />
               Download QR (PNG)
@@ -286,7 +283,7 @@ export default function NewLinkPage() {
             </Button>
             <Link
               href="/app/links"
-              className="flex flex-1 items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-300"
+              className="flex flex-1 items-center justify-center rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300 dark:border-zinc-800 dark:text-zinc-300"
             >
               View all links
             </Link>
@@ -301,16 +298,16 @@ export default function NewLinkPage() {
       <FadeIn>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Create a link
             </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               Shorten a URL for {active?.name}.
             </p>
           </div>
           <Link
             href="/app/links"
-            className="text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+            className="text-sm font-medium text-zinc-500 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
           >
             ← Back to links
           </Link>
@@ -321,7 +318,7 @@ export default function NewLinkPage() {
         <form
           onSubmit={onSubmit}
           noValidate
-          className="mt-6 space-y-5 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900"
+          className="mt-6 space-y-5 rounded-xl border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900"
         >
           <Input
             label="Destination URL"
@@ -347,18 +344,17 @@ export default function NewLinkPage() {
             />
           </div>
 
-          {/* UTM builder */}
           <div>
             <button
               type="button"
               onClick={() => setShowUtm((v) => !v)}
-              className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-400"
+              className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-500 dark:text-blue-400"
             >
               <BarChart3 className="h-4 w-4" />
               {showUtm ? "Hide UTM tracking" : "Add UTM tracking"}
             </button>
             {showUtm && (
-              <div className="mt-4 grid gap-4 rounded-2xl border border-dashed border-slate-300 p-4 dark:border-slate-700 sm:grid-cols-2">
+              <div className="mt-4 grid gap-4 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700 sm:grid-cols-2">
                 <Input
                   label="utm_source"
                   placeholder="instagram"
@@ -389,7 +385,7 @@ export default function NewLinkPage() {
                   value={utm.content}
                   onChange={(e) => setUtm({ ...utm, content: e.target.value })}
                 />
-                <p className="self-end text-xs text-slate-500 dark:text-slate-400">
+                <p className="self-end text-xs text-zinc-500">
                   Merged into the destination URL — explicit values overwrite
                   existing ones.
                 </p>
@@ -437,7 +433,7 @@ export default function NewLinkPage() {
               animate={{ opacity: 1, x: [0, -10, 10, -6, 6, -2, 0] }}
               transition={{ duration: 0.4 }}
             >
-              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+              <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
                 <ul className="list-disc space-y-1 pl-4">
                   {errors.map((problem) => (
                     <li key={problem}>{problem}</li>

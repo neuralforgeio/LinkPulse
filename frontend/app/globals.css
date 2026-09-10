@@ -58,9 +58,9 @@ body {
 }
 
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0.45); }
-  70% { box-shadow: 0 0 0 7px rgb(52 211 153 / 0); }
-  100% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0); }
+  0% { box-shadow: 0 0 0 0 rgb(59 130 246 / 0.45); }
+  70% { box-shadow: 0 0 0 7px rgb(59 130 246 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(59 130 246 / 0); }
 }
 
 .animate-drift { animation: drift 16s ease-in-out infinite; }

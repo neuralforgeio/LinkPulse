@@ -32,6 +32,9 @@ function rangeFor(days: number) {
   };
 }
 
+const selectCls =
+  "rounded-lg border border-zinc-200 bg-white px-3.5 py-1.5 text-sm text-zinc-700 shadow-sm transition focus:border-blue-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200";
+
 export default function AnalyticsPage() {
   const { active } = useActiveWorkspace();
   const tenantId = active?.id ?? null;
@@ -56,10 +59,10 @@ export default function AnalyticsPage() {
       <FadeIn>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Analytics
             </h1>
-            <p className="mt-1 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-zinc-500 dark:text-zinc-400">
               Click performance across {active?.name}.
             </p>
           </div>
@@ -69,10 +72,10 @@ export default function AnalyticsPage() {
                 key={r.days}
                 type="button"
                 onClick={() => setDays(r.days)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
                   days === r.days
-                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                    : "border border-slate-200 text-slate-500 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white"
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                    : "border border-zinc-200 text-zinc-500 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-white"
                 }`}
               >
                 {r.label}
@@ -81,7 +84,7 @@ export default function AnalyticsPage() {
             <select
               value={granularity}
               onChange={(e) => setGranularity(e.target.value)}
-              className="rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+              className={selectCls}
             >
               {GRANULARITIES.map((g) => (
                 <option key={g.value} value={g.value}>
@@ -94,18 +97,17 @@ export default function AnalyticsPage() {
       </FadeIn>
 
       {error && (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
           Failed to load analytics. Is the backend running?
         </p>
       )}
 
-      {/* Stat cards */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-5">
         {isLoading ? (
           [0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800/60"
+              className="h-28 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60"
             />
           ))
         ) : (
@@ -134,15 +136,14 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      {/* Chart */}
       <FadeIn delay={0.2}>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
             Clicks over time
           </h3>
           <div className="mt-4">
             {isLoading ? (
-              <div className="h-64 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+              <div className="h-64 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/60" />
             ) : (
               <ClicksChart data={data?.clicks_over_time ?? []} />
             )}
@@ -150,44 +151,42 @@ export default function AnalyticsPage() {
         </div>
       </FadeIn>
 
-      {/* Top links */}
       <FadeIn delay={0.28}>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
             Top links
           </h3>
           {isLoading ? (
-            <div className="mt-4 h-24 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+            <div className="mt-4 h-24 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/60" />
           ) : data && data.top_links.length > 0 ? (
             <div className="mt-2">
               {data.top_links.map((l) => (
                 <div
                   key={l.link_id}
-                  className="flex items-center justify-between border-b border-slate-100 py-2.5 last:border-0 dark:border-slate-800/60"
+                  className="flex items-center justify-between border-b border-zinc-100 py-2.5 last:border-0 dark:border-zinc-800/60"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    <p className="truncate font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
                       /{l.short_code}
                     </p>
-                    <p className="truncate text-sm text-slate-500 dark:text-slate-400">
+                    <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                       {l.title}
                     </p>
                   </div>
-                  <p className="ml-3 shrink-0 font-semibold text-slate-900 dark:text-white">
+                  <p className="ml-3 shrink-0 font-semibold text-zinc-900 dark:text-white">
                     {l.clicks.toLocaleString("en-US")}
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-slate-400 dark:text-slate-500">
+            <p className="mt-3 text-sm text-zinc-400 dark:text-zinc-500">
               No clicks yet.
             </p>
           )}
         </div>
       </FadeIn>
 
-      {/* Top rankings */}
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         <TopList title="Top referrers" items={data?.top_referrers ?? []} />
         <TopList title="Top devices" items={data?.top_devices ?? []} />

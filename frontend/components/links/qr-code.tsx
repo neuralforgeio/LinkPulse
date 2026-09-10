@@ -16,9 +16,9 @@ export function QrCode({ value, size = 180 }: QrCodeProps) {
   useEffect(() => {
     let cancelled = false;
     QRCode.toDataURL(value, {
-      width: size * 2, // rendered at 2x so it stays crisp on any screen
+      width: size * 2,
       margin: 2,
-      color: { dark: "#022c22", light: "#ffffff" },
+      color: { dark: "#000000", light: "#ffffff" },
     })
       .then((url) => {
         if (!cancelled) setSrc(url);
@@ -35,7 +35,7 @@ export function QrCode({ value, size = 180 }: QrCodeProps) {
     return (
       <div
         style={{ width: size, height: size }}
-        className="animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800"
+        className="animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800"
         aria-hidden="true"
       />
     );

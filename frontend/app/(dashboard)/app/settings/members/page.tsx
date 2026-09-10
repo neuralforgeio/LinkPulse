@@ -27,10 +27,10 @@ interface InviteResult {
 const INVITE_ROLES = ["member", "viewer", "admin"];
 
 const ROLE_BADGE: Record<string, string> = {
-  owner: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  admin: "bg-teal-500/10 text-teal-700 dark:text-teal-300",
-  member: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  viewer: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  owner: "bg-blue-600/10 text-blue-700 dark:text-blue-300",
+  admin: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  member: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  viewer: "bg-zinc-500/10 text-zinc-500 dark:text-zinc-400",
 };
 
 function formatDate(iso: string): string {
@@ -78,7 +78,9 @@ export default function MembersPage() {
     mutationFn: (userId: string) =>
       api<{ message: string }>(
         `/api/v1/tenants/${tenantId}/members/${userId}`,
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+        },
       ),
     onSuccess: invalidate,
   });
@@ -118,8 +120,6 @@ export default function MembersPage() {
         ? "Something went wrong."
         : null;
 
-  // Owner appears in the dropdown only for owners (least privilege,
-  // mirroring the backend rule).
   const roleOptions = ["owner", "admin", "member", "viewer"].filter(
     (r) => r !== "owner" || canGrantOwner,
   );
@@ -127,12 +127,12 @@ export default function MembersPage() {
   return (
     <div className="space-y-6">
       <FadeIn>
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+        <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">
           Members
         </h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Manage who has access to{" "}
-          <span className="font-medium text-slate-700 dark:text-slate-200">
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">
             {active?.name}
           </span>
           . Your role: <span className="font-medium">{myRole}</span>.
@@ -140,20 +140,20 @@ export default function MembersPage() {
       </FadeIn>
 
       {actionErrorMessage && (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
           {actionErrorMessage}
         </p>
       )}
 
       {canManage && (
         <FadeIn delay={0.08}>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">
+                <h3 className="font-semibold text-zinc-900 dark:text-white">
                   Invite a member
                 </h3>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                   One-time code, valid for 72 hours.
                 </p>
               </div>
@@ -161,7 +161,7 @@ export default function MembersPage() {
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="rounded-xl border border-transparent bg-slate-100 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-500 focus:bg-white focus:outline-none dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950"
+                  className="rounded-lg border border-transparent bg-zinc-100 px-3.5 py-2.5 text-sm text-zinc-900 shadow-sm transition focus:border-blue-500 focus:bg-white focus:outline-none dark:bg-zinc-800/50 dark:text-white dark:focus:bg-zinc-900"
                 >
                   {INVITE_ROLES.map((role) => (
                     <option key={role} value={role}>
@@ -180,24 +180,24 @@ export default function MembersPage() {
             </div>
 
             {invite && (
-              <div className="mt-5 rounded-2xl bg-emerald-500/10 p-5">
-                <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+              <div className="mt-5 rounded-lg bg-blue-600/10 p-5">
+                <p className="text-xs font-medium uppercase tracking-wider text-blue-700 dark:text-blue-300">
                   Invitation created — joins as {invite.role}
                 </p>
-                <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-slate-900 dark:text-white">
+                <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-zinc-900 dark:text-white">
                   {invite.invite_code}
                 </p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-xs text-zinc-500">
                   Expires {new Date(invite.expires_at).toLocaleString("en-US")}
                 </p>
                 <button
                   type="button"
                   onClick={copyInviteLink}
-                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-900"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 text-emerald-500" />
+                      <Check className="h-4 w-4 text-blue-600" />
                       Copied!
                     </>
                   ) : (
@@ -213,22 +213,21 @@ export default function MembersPage() {
         </FadeIn>
       )}
 
-      {/* Roster */}
       <FadeIn delay={0.16}>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           {isLoading && (
             <div className="space-y-3 p-5">
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-14 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60"
+                  className="h-14 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/60"
                 />
               ))}
             </div>
           )}
 
           {error && (
-            <p className="p-6 text-sm text-red-600 dark:text-red-400">
+            <p className="p-6 text-sm text-rose-600 dark:text-rose-400">
               Failed to load members. Is the backend running?
             </p>
           )}
@@ -238,27 +237,27 @@ export default function MembersPage() {
             return (
               <div
                 key={m.user_id}
-                className="flex items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-0 dark:border-slate-800/60"
+                className="flex items-center gap-4 border-b border-zinc-100 px-5 py-4 last:border-0 dark:border-zinc-800/60"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-bold text-slate-950">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white">
                   {m.name.charAt(0).toUpperCase()}
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 truncate font-medium text-slate-900 dark:text-white">
+                  <p className="flex items-center gap-2 truncate font-medium text-zinc-900 dark:text-white">
                     {m.name}
                     {isSelf && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
                         You
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-sm text-slate-500 dark:text-slate-400">
+                  <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
                     {m.email}
                   </p>
                 </div>
 
-                <p className="hidden shrink-0 text-xs text-slate-400 sm:block">
+                <p className="hidden shrink-0 text-xs text-zinc-400 sm:block">
                   joined {formatDate(m.joined_at)}
                 </p>
 
@@ -272,7 +271,7 @@ export default function MembersPage() {
                         role: e.target.value,
                       })
                     }
-                    className="shrink-0 rounded-lg border border-transparent bg-slate-100 px-2.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition focus:border-emerald-500 focus:outline-none dark:bg-slate-900 dark:text-slate-200"
+                    className="shrink-0 rounded-lg border border-transparent bg-zinc-100 px-2.5 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition focus:border-blue-500 focus:outline-none dark:bg-zinc-800/50 dark:text-zinc-200"
                   >
                     {roleOptions.map((role) => (
                       <option key={role} value={role}>
@@ -300,14 +299,14 @@ export default function MembersPage() {
                             removeMutation.mutate(m.user_id);
                             setConfirmingId(null);
                           }}
-                          className="rounded-full bg-red-500 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-red-400"
+                          className="rounded-full bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500"
                         >
                           Confirm remove
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmingId(null)}
-                          className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                          className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                         >
                           Cancel
                         </button>
@@ -317,7 +316,7 @@ export default function MembersPage() {
                         type="button"
                         onClick={() => setConfirmingId(m.user_id)}
                         title="Remove member"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -331,7 +330,7 @@ export default function MembersPage() {
       </FadeIn>
 
       {!canManage && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           Only owners and admins can invite or manage members.
         </p>
       )}
