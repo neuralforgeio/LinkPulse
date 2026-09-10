@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   BarChart3,
   Link2,
@@ -9,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useActiveWorkspace } from "@/components/auth/workspace-context";
 import { FadeIn } from "@/components/motion/fade";
 
 const PLACEHOLDER_STATS = [
@@ -19,8 +19,8 @@ const PLACEHOLDER_STATS = [
 ];
 
 export default function OverviewPage() {
-  const { user, tenants, defaultTenantId } = useAuth();
-  const tenant = tenants.find((t) => t.id === defaultTenantId) ?? tenants[0];
+  const { user } = useAuth();
+  const { active } = useActiveWorkspace();
 
   return (
     <div className="space-y-6">
@@ -31,7 +31,7 @@ export default function OverviewPage() {
         <p className="mt-1 text-slate-500 dark:text-slate-400">
           Here&apos;s what&apos;s happening in{" "}
           <span className="font-medium text-slate-700 dark:text-slate-200">
-            {tenant?.name}
+            {active?.name}
           </span>
           .
         </p>
@@ -62,14 +62,14 @@ export default function OverviewPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
-                {tenant?.name}
+                {active?.name}
               </h2>
               <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">
-                /{tenant?.slug}
+                /{active?.slug}
               </p>
             </div>
             <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              {tenant?.role}
+              {active?.role}
             </span>
           </div>
         </div>

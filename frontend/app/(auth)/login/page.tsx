@@ -11,6 +11,17 @@ import { Input } from "@/components/ui/input";
 import { FadeIn } from "@/components/motion/fade";
 import { useAuth } from "@/components/auth/auth-provider";
 
+// The "next" param (e.g. ?next=/invite/INV-ABC) sends the user back to
+// where they were heading before the login wall. Only same-app paths
+// are allowed — never an external URL (open-redirect protection).
+function nextRedirect(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/") && !next.startsWith("//")) {
+    return next;
+  }
+  return "/app/overview";
+}
+
 export default function LoginPage() {
   const { login, status } = useAuth();
   const router = useRouter();
@@ -25,7 +36,7 @@ export default function LoginPage() {
   // Already signed in? Skip the form.
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/app/overview");
+      router.replace(nextRedirect());
     }
   }, [status, router]);
 
@@ -46,7 +57,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      router.push("/app/overview");
+      router.push(nextRedirect());
     } catch (err) {
       if (err instanceof ApiError) {
         fail(err.message);
