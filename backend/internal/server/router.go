@@ -1,72 +1,97 @@
+// Package server wires the HTTP router, middleware, and route handlers.
 package server
 
 import (
-	"context"
-	"encoding/json"
-	"log/slog"
-	"net/http"
-	"time"
+    "context"
+    "encoding/json"
+    "log/slog"
+    "net/http"
+    "time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
+    "github.com/go-chi/chi/v5"
+    "github.com/go-chi/chi/v5/middleware"
+    "github.com/jackc/pgx/v5/pgxpool"
+
+    "linkpulse/internal/auth"
 )
 
+// NewRouter builds the chi router with all global middleware and routes.
 func NewRouter(logger *slog.Logger, db *pgxpool.Pool) http.Handler {
-	r := chi.NewRouter();
+    r := chi.NewRouter()
 
-	r.Use(middleware.RequestID) // assigns X-Request-Id header + context
-	r.Use(middleware.RealIP)		// resolves real client IP behind proxies
-	r.Use(requestLogger(logger)) // structured slog per request
-	r.Use(middleware.Recoverer)
+    // Global middleware (runs on every request, in this order).
+    r.Use(middleware.RequestID)
+    r.Use(middleware.RealIP)
+    r.Use(requestLogger(logger))
+    r.Use(middleware.Recoverer)
 
-	// Livenses probe: is the process alive?
-	r.Get("/healthz", handleHealthz)
+    // Health probes (PRD 18.3).
+    r.Get("/healthz", handleHealthz)
+    r.Get("/readyz", handleReadyz(db))
 
-	// Readiness probe: alive AND the database answers a ping
-	r.Get("/readyz", handleReadyz(db))
+    // Feature handlers.
+    authSvc := auth.NewService(db)
+    authHandler := auth.NewHandler(authSvc, logger)
 
-	return r
+    // Public API v1 (PRD section 15 / 9.x endpoint paths).
+    r.Route("/api/v1", func(r chi.Router) {
+        r.Route("/auth", func(r chi.Router) {
+            r.Post("/register", authHandler.Register)
+        })
+    })
+
+    return r
 }
 
+// handleHealthz reports liveness. Always 200 while the process runs.
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+    writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// handleReadyz reports readiness: the process is alive AND the database
+// is reachable. Returns 503 when the database is down.
 func handleReadyz(db *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
+    return func(w http.ResponseWriter, r *http.Request) {
+        ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+        defer cancel()
 
-		if err := db.Ping(ctx); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_unreachable"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
-	}
+        if err := db.Ping(ctx); err != nil {
+            writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_unreachable"})
+            return
+        }
+        writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+    }
 }
 
-// requestLogger logs on structured line per request: request_id
-// method, path, status, duration
-func requestLogger(logger *slog.Logger) func (http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
+// requestLogger logs one structured line per request (PRD 18.1).
+func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            start := time.Now()
 
-			// wrap the writer so we can read the final status code
-			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+            ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-			next.ServeHTTP(ww, r)
+						if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+							ww.Header().Set("X-Request-Id", reqID)
+						}
+						
+            next.ServeHTTP(ww, r)
 
-			logger.Info("http request", "request_id", middleware.GetReqID(r.Context()), "method", r.Method, "path", r.URL.Path, "status", ww.Status(), "duration_ms", time.Since(start).Milliseconds())
-		})
-	}
+            logger.Info("http request",
+                "request_id", middleware.GetReqID(r.Context()),
+                "method", r.Method,
+                "path", r.URL.Path,
+                "status", ww.Status(),
+                "duration_ms", time.Since(start).Milliseconds(),
+            )
+        })
+    }
 }
 
 // writeJSON writes v as a JSON response with the given status code.
+// Health probes use this raw format; API endpoints use httpx instead.
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	// Status is already sent; nothing more we can do on encode failure.
-	_ = json.NewEncoder(w).Encode(v)
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    _ = json.NewEncoder(w).Encode(v)
 }
