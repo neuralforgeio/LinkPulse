@@ -45,6 +45,8 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Ha
             // Public endpoints.
             r.Post("/register", authHandler.Register)
             r.Post("/login", authHandler.Login)
+            r.Post("/refresh", authHandler.Refresh)
+            r.Post("/logout", authHandler.Logout)
 
             // Token-protected endpoints.
             r.Group(func(r chi.Router) {

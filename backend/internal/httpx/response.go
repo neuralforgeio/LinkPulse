@@ -10,6 +10,7 @@ const (
 	CodeBaqRequest			= "BAD_REQUEST"
 	CodeConflict				= "CONFLICT"
 	CodeUnauthorized    = "UNAUTHORIZED"
+	CodeInvalidToken		= "INVALID_TOKEN"
   CodeInternalError   = "INTERNAL_ERROR"
 )
 

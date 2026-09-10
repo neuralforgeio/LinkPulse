@@ -208,15 +208,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
     // Refresh token → HTTP-only cookie (PRD 9.1.2, 16.4–16.6): JavaScript
     // cannot read it, so an XSS bug cannot steal the session.
-    http.SetCookie(w, &http.Cookie{
-        Name:     refreshCookieName,
-        Value:    res.RefreshRaw,
-        Path:     "/api/v1/auth",
-        HttpOnly: true,
-        Secure:   h.svc.cookieSecure,
-        SameSite: http.SameSiteLaxMode,
-        MaxAge:   int(h.svc.refreshTTL.Seconds()),
-    })
+    h.setRefreshCookie(w, res.RefreshRaw)
 
     httpx.Success(w, http.StatusOK, loginResponse{
         User:        res.User,
