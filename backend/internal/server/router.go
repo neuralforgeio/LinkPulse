@@ -2,21 +2,22 @@
 package server
 
 import (
-    "context"
-    "encoding/json"
-    "log/slog"
-    "net/http"
-    "time"
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
 
-    "github.com/go-chi/chi/v5"
-    "github.com/go-chi/chi/v5/middleware"
-    "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-    "linkpulse/internal/auth"
+	"linkpulse/internal/auth"
+	"linkpulse/internal/config"
 )
 
 // NewRouter builds the chi router with all global middleware and routes.
-func NewRouter(logger *slog.Logger, db *pgxpool.Pool) http.Handler {
+func NewRouter(logger *slog.Logger, db *pgxpool.Pool, cfg config.Config) http.Handler {
     r := chi.NewRouter()
 
     // Global middleware (runs on every request, in this order).
@@ -30,13 +31,26 @@ func NewRouter(logger *slog.Logger, db *pgxpool.Pool) http.Handler {
     r.Get("/readyz", handleReadyz(db))
 
     // Feature handlers.
-    authSvc := auth.NewService(db)
+    authSvc := auth.NewService(db, auth.ServiceConfig{
+        JWTSecret:    cfg.JWTSecret,
+        AccessTTL:    cfg.JWTAccessTTL,
+        RefreshTTL:   cfg.JWTRefreshTTL,
+        CookieSecure: cfg.AppEnv != "development",
+    })
     authHandler := auth.NewHandler(authSvc, logger)
 
-    // Public API v1 (PRD section 15 / 9.x endpoint paths).
+    // Public API v1.
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
+            // Public endpoints.
             r.Post("/register", authHandler.Register)
+            r.Post("/login", authHandler.Login)
+
+            // Token-protected endpoints.
+            r.Group(func(r chi.Router) {
+                r.Use(authSvc.RequireAuth)
+                r.Get("/me", authHandler.Me)
+            })
         })
     })
 
@@ -71,10 +85,11 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
             ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-						if reqID := middleware.GetReqID(r.Context()); reqID != "" {
-							ww.Header().Set("X-Request-Id", reqID)
-						}
-						
+            // PRD 18.2: return the request ID in the response header.
+            if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+                ww.Header().Set("X-Request-Id", reqID)
+            }
+
             next.ServeHTTP(ww, r)
 
             logger.Info("http request",

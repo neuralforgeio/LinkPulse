@@ -10,6 +10,7 @@ import (
     "net/http"
     "regexp"
     "strings"
+    "time"
     "unicode"
 
     "github.com/google/uuid"
@@ -24,14 +25,32 @@ import (
 // uniqueViolation is PostgreSQL's error code for a UNIQUE constraint hit.
 const uniqueViolation = "23505"
 
+// ServiceConfig carries auth-specific settings from the environment
+type ServiceConfig struct {
+    JWTSecret       string
+    AccessTTL       time.Duration
+    RefreshTTL      time.Duration
+    CookieSecure    bool
+}
+
 // Service holds dependencies for auth flows.
 type Service struct {
-    db *pgxpool.Pool
+    db           *pgxpool.Pool
+    jwtSecret    string
+    accessTTL    time.Duration
+    refreshTTL   time.Duration
+    cookieSecure bool
 }
 
 // NewService builds an auth Service.
-func NewService(db *pgxpool.Pool) *Service {
-    return &Service{db: db}
+func NewService(db *pgxpool.Pool, cfg ServiceConfig) *Service {
+    return &Service{
+        db:           db,
+        jwtSecret:    cfg.JWTSecret,
+        accessTTL:    cfg.AccessTTL,
+        refreshTTL:   cfg.RefreshTTL,
+        cookieSecure: cfg.CookieSecure,
+    }
 }
 
 // RegisterInput is the request body for POST /api/v1/auth/register.

@@ -23,8 +23,8 @@ func main() {
 	cfg := config.Load()
 
 	// Fail fast: no database URL, no point starting the server
-	if cfg.DatabaseURL == "" {
-		slog.Error("DATABASE_URL is required - set in backend/.env")
+	if cfg.DatabaseURL == "" || cfg.JWTSecret == "" {
+		slog.Error("DATABASE_URL and JWT_SECRET is required - set in backend/.env")
 		os.Exit(1)
 	}
 
@@ -42,7 +42,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr: 				":" + cfg.AppPort,
-		Handler: 			server.NewRouter(logger, pool),
+		Handler: 			server.NewRouter(logger, pool, cfg),
 		ReadTimeout: 	10 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout: 	60 * time.Second,
