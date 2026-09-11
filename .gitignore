@@ -19,3 +19,6 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# Internal planning artifacts
+.plans/

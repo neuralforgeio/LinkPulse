@@ -105,6 +105,28 @@ async function request(
   });
 }
 
+/**
+ * apiRaw performs an authenticated request but returns the raw Response
+ * without envelope unwrapping. For file downloads (CSV export). Handles
+ * the same pre-emptive refresh and 401 retry as api().
+ */
+export async function apiRaw(path: string): Promise<Response> {
+  let token = getToken();
+  if (token && isTokenExpired()) {
+    token = await refreshAccessToken();
+  }
+
+  let res = await request(path, { method: "GET" }, token);
+
+  if (res.status === 401) {
+    const fresh = await refreshAccessToken();
+    if (fresh) {
+      res = await request(path, { method: "GET" }, fresh);
+    }
+  }
+  return res;
+}
+
 export async function api<T>(
   path: string,
   options: RequestOptions = {},

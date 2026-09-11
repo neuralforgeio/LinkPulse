@@ -188,6 +188,9 @@ export default function Home() {
                 >
                   {signedIn ? "Dashboard" : "Sign in"}
                 </Link>
+                <Link href="/demo" className={ghost}>
+                  Try the demo
+                </Link>
               </div>
             </FadeIn>
 

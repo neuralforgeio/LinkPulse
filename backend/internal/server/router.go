@@ -230,9 +230,20 @@ func NewRouter(
 					r.Route("/links", func(r chi.Router) {
 						r.Get("/", linkHandler.List)
 						r.Post("/", linkHandler.Create)
+
+						r.With(auditSvc.TrackAction("link.bulk_create", "link")).
+							Post("/bulk", linkHandler.BulkCreate)
+						r.With(auditSvc.TrackAction("link.import", "link")).
+							Post("/import", linkHandler.Import)
+						r.With(auditSvc.TrackAction("link.export", "link")).
+							Get("/export", linkHandler.Export)
+
 						r.Get("/{linkId}", linkHandler.Get)
 						r.Patch("/{linkId}", linkHandler.Update)
 						r.Delete("/{linkId}", linkHandler.Delete)
+
+						r.Get("/{linkId}/analytics", analyticsHandler.LinkAnalytics)
+						r.Get("/{linkId}/clicks", analyticsHandler.RecentClicks)
 					})
 				})
 			})

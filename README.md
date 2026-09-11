@@ -7,7 +7,7 @@
 
 **Self-hosted, multi-tenant URL shortener with real click analytics.**
 
-![Version](https://img.shields.io/badge/version-1.0.0-2563eb)
+![Version](https://img.shields.io/badge/version-1.2.0-2563eb)
 ![License](https://img.shields.io/badge/license-MIT-22c55e)
 ![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
@@ -32,12 +32,15 @@ Built to be owned: self-hosted, MIT licensed, zero vendor lock-in.
 - **Email OTP login** — two-step login with a 6-digit code (Resend, with dev-log fallback)
 - **Password reset via email OTP** — one-time codes, 10-minute expiry, session revocation
 - **Short links** — custom aliases, random base62 codes, expiry, click limits, password protection, UTM builder
+- **Link detail page** — per-link overview, analytics charts, QR code, and inline settings
+- **Bulk operations** — create up to 100 links per request, import/export CSV (500 rows)
 - **Async click tracking** — redirects never wait for analytics: in-memory buffer, batch inserts, graceful-shutdown flush
 - **Analytics** — clicks over time, unique visitor estimates (salted IP hashes), top referrers / devices / browsers / OS / campaigns
 - **Multi-tenant workspaces** — invite codes, four roles (owner / admin / member / viewer) enforced server-side on every route
 - **Public REST API** — scoped API keys (`links:read`, `links:write`, `analytics:read`), keys hashed at rest, shown exactly once
 - **Security** — Argon2id password hashing, JWT access tokens + rotating refresh tokens with reuse detection, rate limiting, append-only audit log, parameterized SQL everywhere
 - **Dashboard** — dark / light / system themes, fully responsive, QR codes, CSV-ready data
+- **Demo mode** — explore the full dashboard with realistic sample data at `/demo`, no account or backend needed
 
 ## 🏗 Architecture
 
@@ -112,7 +115,9 @@ npm run dev                         # → http://localhost:3000
 | Auth       | `POST /api/v1/auth/register · login · refresh · logout` · `GET /me`             |
 | Workspaces | `POST/GET /tenants` · members & roles · invitations · leave                     |
 | Links      | `POST/GET/PATCH/DELETE /tenants/{id}/links` — search, filters, sort, pagination |
+| Links      | `POST /tenants/{id}/links/bulk` (100 max) · `POST /links/import` · `GET /links/export?format=csv\|json` |
 | Analytics  | `GET /tenants/{id}/analytics/overview` — time series + top rankings             |
+| Analytics  | `GET /tenants/{id}/links/{id}/analytics` · `GET /tenants/{id}/links/{id}/clicks` |
 | API keys   | `POST/GET/DELETE /tenants/{id}/api-keys` — scoped, one-time reveal              |
 | Public API | `/api/v1/public/links` — Bearer `lp_live_…`, scope-enforced                     |
 | Redirect   | `GET /{code}` → `302` · `410` for expired / disabled / limit-reached            |
@@ -132,7 +137,8 @@ go test ./internal/...    # shortid, URL validation, UTM merge, rate limiter
 - [v] Password-protected links with 6-digit OTP + email reset flow
 - [v] Email OTP login (Resend)
 - [v] Settings (General, Profile, Members, API Keys, Audit)
-- [v] Bulk import/export CSV
+- [v] Bulk import/export CSV + link detail page + demo mode
+- [v] Per-link analytics with recent clicks feed
 - [] Redis-backed distributed rate limiting
 
 ## ⚠️ Known Limitations
@@ -140,7 +146,7 @@ go test ./internal/...    # shortid, URL validation, UTM merge, rate limiter
 - Analytics time buckets are UTC days
 - Rate limiting is per-instance (in-memory); use `RATE_LIMIT_ENABLED=false` to disable
 - Unique visitors are estimates derived from salted IP hashes
-- Password-protected links currently redirect to the password page route (UI pending)
+- Bulk create is transactional per item, not per batch — a partial failure leaves successful rows in place
 
 ## 📄 License
 
