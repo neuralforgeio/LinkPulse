@@ -1,3 +1,4 @@
+// Package server wires the HTTP router, middleware, and route handlers.
 package server
 
 import (
@@ -97,6 +98,14 @@ func NewRouter(
     })
     authHandler := auth.NewHandler(authSvc, logger)
 
+    // Reset links point at the local frontend in development, the
+    // public deployment otherwise.
+    resetLinkBase := publicFrontend
+    if cfg.AppEnv == "development" && len(allowedOrigins) > 0 {
+        resetLinkBase = allowedOrigins[0]
+    }
+    resetHandler := auth.NewResetHandler(db, logger, resetLinkBase)
+
     tenantSvc := tenant.NewService(db, logger)
     tenantHandler := tenant.NewHandler(tenantSvc, logger)
 
@@ -130,11 +139,10 @@ func NewRouter(
     // Public API (PRD 9.8).
     r.Route("/api/v1/public", func(r chi.Router) {
         // Visitor endpoint: link password verification — NO API key
-        // (PRD 9.5.3). Rate limited per IP like the redirect itself.
+        // (PRD 9.5.3).
         r.With(redirectRL.Middleware(ratelimit.KeyIP)).
             Post("/links/{shortCode}/verify-password", redirectHandler.VerifyPassword)
 
-        // API-key endpoints.
         r.Group(func(r chi.Router) {
             r.Use(apikeySvc.RequireKey)
             r.Use(publicRL.Middleware(func(r *http.Request) string {
@@ -174,6 +182,13 @@ func NewRouter(
             r.With(auditSvc.TrackAction("auth.logout", "user")).
                 Post("/logout", authHandler.Logout)
             r.Post("/refresh", authHandler.Refresh)
+
+            // Password reset — tight IP limit: anti email-enumeration
+            // (PRD 9.1.7, 9.1.8, 9.9).
+            r.With(registerRL.Middleware(ratelimit.KeyIP)).
+                Post("/password/reset-request", resetHandler.RequestReset)
+            r.With(registerRL.Middleware(ratelimit.KeyIP)).
+                Post("/password/reset-confirm", resetHandler.ConfirmReset)
 
             r.Group(func(r chi.Router) {
                 r.Use(authSvc.RequireAuth)

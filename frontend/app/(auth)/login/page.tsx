@@ -134,15 +134,23 @@ export default function LoginPage() {
       </form>
 
       <FadeIn delay={0.32}>
-        <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          New to LinkPulse?{" "}
+        <div className="mt-8 flex flex-col items-center gap-3 text-sm">
           <Link
-            href="/register"
+            href="/forgot-password"
             className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
           >
-            Create an account
+            Forgot your password?
           </Link>
-        </p>
+          <p className="text-zinc-500 dark:text-zinc-400">
+            New to LinkPulse?{" "}
+            <Link
+              href="/register"
+              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
+            >
+              Create an account
+            </Link>
+          </p>
+        </div>
       </FadeIn>
     </div>
   );
