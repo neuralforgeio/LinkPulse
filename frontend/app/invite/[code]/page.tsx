@@ -62,14 +62,20 @@ export default function InvitePage() {
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-zinc-50 px-6 dark:bg-zinc-950">
-      <div className="dot-grid-light absolute inset-0 dark:hidden" aria-hidden="true" />
-      <div className="dot-grid absolute inset-0 hidden dark:block" aria-hidden="true" />
+      <div
+        className="dot-grid-light absolute inset-0 dark:hidden"
+        aria-hidden="true"
+      />
+      <div
+        className="dot-grid absolute inset-0 hidden dark:block"
+        aria-hidden="true"
+      />
       <div
         className="absolute -top-32 h-96 w-96 rounded-full bg-blue-200/50 blur-[120px] dark:bg-blue-500/15"
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-sm">
+      <div className="fade-up relative w-full max-w-sm">
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
@@ -130,7 +136,9 @@ export default function InvitePage() {
               Invitation unavailable
             </h1>
             <p className="mt-2 font-mono text-sm text-zinc-400">{code}</p>
-            <p className="mt-1 text-sm text-rose-600 dark:text-rose-400">{error}</p>
+            <p className="mt-1 text-sm text-rose-600 dark:text-rose-400">
+              {error}
+            </p>
             <Link
               href="/"
               className="mt-6 inline-block text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
@@ -139,12 +147,7 @@ export default function InvitePage() {
             </Link>
           </motion.div>
         ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="rounded-xl border border-zinc-200 bg-white p-8 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
-          >
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400">
               <MailOpen className="h-7 w-7" />
             </div>
@@ -153,16 +156,22 @@ export default function InvitePage() {
             </h1>
             <p className="mt-2 text-center text-sm text-zinc-500 dark:text-zinc-400">
               Signed in as{" "}
-              <span className="font-medium text-zinc-700 dark:text-zinc-200">{user?.email}</span>.
-              Accept to join the workspace.
+              <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                {user?.email}
+              </span>
+              . Accept to join the workspace.
             </p>
             <p className="mt-5 rounded-lg bg-zinc-100 px-4 py-3 text-center font-mono text-lg font-semibold tracking-wider text-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-200">
               {code}
             </p>
-            <Button onClick={accept} loading={loading} className="mt-5 w-full py-3">
+            <Button
+              onClick={accept}
+              loading={loading}
+              className="mt-5 w-full py-3"
+            >
               Accept invitation
             </Button>
-          </motion.div>
+          </div>
         )}
       </div>
     </div>

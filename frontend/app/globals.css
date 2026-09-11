@@ -27,7 +27,11 @@ body {
 }
 
 .dot-grid-light {
-  background-image: radial-gradient(circle, rgb(15 23 42 / 0.07) 1px, transparent 1px);
+  background-image: radial-gradient(
+    circle,
+    rgb(15 23 42 / 0.07) 1px,
+    transparent 1px
+  );
   background-size: 22px 22px;
 }
 
@@ -43,31 +47,61 @@ body {
 /* ---------- LinkPulse animations ---------- */
 
 @keyframes drift {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(48px, -36px) scale(1.1); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(48px, -36px) scale(1.1);
+  }
 }
 
 @keyframes drift-reverse {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-40px, 28px) scale(0.92); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-40px, 28px) scale(0.92);
+  }
 }
 
 @keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgb(59 130 246 / 0.45); }
-  70% { box-shadow: 0 0 0 7px rgb(59 130 246 / 0); }
-  100% { box-shadow: 0 0 0 0 rgb(59 130 246 / 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgb(59 130 246 / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(59 130 246 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(59 130 246 / 0);
+  }
 }
 
-.animate-drift { animation: drift 16s ease-in-out infinite; }
-.animate-drift-reverse { animation: drift-reverse 19s ease-in-out infinite; }
-.animate-marquee { animation: marquee 32s linear infinite; }
-.animate-marquee:hover { animation-play-state: paused; }
-.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+.animate-drift {
+  animation: drift 16s ease-in-out infinite;
+}
+.animate-drift-reverse {
+  animation: drift-reverse 19s ease-in-out infinite;
+}
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-out infinite;
+}
 
 /* Respect users who prefer less motion. */
 @media (prefers-reduced-motion: reduce) {
@@ -75,6 +109,60 @@ body {
   .animate-drift-reverse,
   .animate-marquee,
   .animate-pulse-ring {
+    animation: none;
+  }
+}
+
+/* ---------- Entrance animations (CSS-only) ---------- */
+/* CSS animations run the moment styles load — no JavaScript needed.
+   This guarantees content is never stuck invisible when hydration is
+   slow or fails (the blank-page bug). framer-motion stays only for
+   interactive decorations, never for content visibility. */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    height: 6%;
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.fade-down {
+  animation: fade-down 0.6s ease-out both;
+}
+
+.bar-grow {
+  animation: bar-grow 0.9s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .fade-down,
+  .bar-grow {
     animation: none;
   }
 }
