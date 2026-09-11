@@ -1,13 +1,9 @@
-// Package config loads all application configuration from environment
-// variables. Every value has a safe default so the server boots in
-// development without any .env file — except DATABASE_URL and JWT_SECRET,
-// which must be provided because there is no safe default for them.
 package config
 
 import (
-	"os"
-	"strconv"
-	"time"
+    "os"
+    "strconv"
+    "time"
 )
 
 // Config holds all runtime configuration for the LinkPulse backend.
@@ -33,32 +29,34 @@ type Config struct {
     RateLimitRegisterPerMinute  int
     RateLimitPublicAPIPerMinute int
     RateLimitDashboardPerMinute int
+    CookieSameSite string
 }
 
 // Load reads configuration from the environment with development defaults.
 func Load() Config {
     return Config{
-        AppEnv:                getEnv("APP_ENV", "development"),
-        AppPort:               getEnv("APP_PORT", "8080"),
-        AppBaseURL:            getEnv("APP_BASE_URL", "http://localhost:8080"),
-        FrontendOrigin:        getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
-        DatabaseURL:           getEnv("DATABASE_URL", ""),
-        JWTSecret:             getEnv("JWT_SECRET", ""),
-        JWTAccessTTL:          getEnvDuration("JWT_ACCESS_TTL", 15*time.Minute),
-        JWTRefreshTTL:         getEnvDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
-        LogLevel:              getEnv("LOG_LEVEL", "info"),
-        LogFormat:             getEnv("LOG_FORMAT", "pretty"),
-        LogDir:                getEnv("LOG_DIR", "logs"),
-        ClickSalt:             getEnv("CLICK_SALT", ""),
-        ClickBufferSize:       getEnvInt("CLICK_BUFFER_SIZE", 5000),
-        ClickFlushIntervalMS:  getEnvInt("CLICK_FLUSH_INTERVAL_MS", 1000),
-        ClickFlushBatchSize:   getEnvInt("CLICK_FLUSH_BATCH_SIZE", 500),
+        AppEnv:                      getEnv("APP_ENV", "development"),
+        AppPort:                     getEnv("APP_PORT", "8080"),
+        AppBaseURL:                  getEnv("APP_BASE_URL", "http://localhost:8080"),
+        FrontendOrigin:              getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
+        DatabaseURL:                 getEnv("DATABASE_URL", ""),
+        JWTSecret:                   getEnv("JWT_SECRET", ""),
+        JWTAccessTTL:                getEnvDuration("JWT_ACCESS_TTL", 15*time.Minute),
+        JWTRefreshTTL:               getEnvDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
+        LogLevel:                    getEnv("LOG_LEVEL", "info"),
+        LogFormat:                   getEnv("LOG_FORMAT", "pretty"),
+        LogDir:                      getEnv("LOG_DIR", "logs"),
+        ClickSalt:                   getEnv("CLICK_SALT", ""),
+        ClickBufferSize:             getEnvInt("CLICK_BUFFER_SIZE", 5000),
+        ClickFlushIntervalMS:        getEnvInt("CLICK_FLUSH_INTERVAL_MS", 1000),
+        ClickFlushBatchSize:         getEnvInt("CLICK_FLUSH_BATCH_SIZE", 500),
         RateLimitEnabled:            getEnvBool("RATE_LIMIT_ENABLED", true),
         RateLimitRedirectPerMinute:  getEnvInt("RATE_LIMIT_REDIRECT_PER_MINUTE", 100),
         RateLimitLoginPerMinute:     getEnvInt("RATE_LIMIT_LOGIN_PER_MINUTE", 10),
         RateLimitRegisterPerMinute:  getEnvInt("RATE_LIMIT_REGISTER_PER_MINUTE", 5),
         RateLimitPublicAPIPerMinute: getEnvInt("RATE_LIMIT_PUBLIC_API_PER_MINUTE", 300),
         RateLimitDashboardPerMinute: getEnvInt("RATE_LIMIT_DASHBOARD_PER_MINUTE", 600),
+        CookieSameSite:              getEnv("COOKIE_SAMESITE", "lax"),
     }
 }
 

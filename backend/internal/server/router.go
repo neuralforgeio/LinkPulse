@@ -1,4 +1,3 @@
-// Package server wires the HTTP router, middleware, and route handlers.
 package server
 
 import (
@@ -7,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,17 +38,38 @@ func NewRouter(
 ) http.Handler {
 	r := chi.NewRouter()
 
-	// Global middleware (runs on every request, in this order).
+	// Security headers (PRD 16.18).
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	// Global middleware.
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(requestLogger(logger))
 	r.Use(middleware.Recoverer)
 
-	// CORS: allow ONLY our frontend origin.
+	// CORS allowlist: FRONTEND_ORIGIN supports a comma-separated list,
+	// e.g. "http://localhost:3000,https://linkpulse.vercel.app".
+	// The last entry is treated as the public deployment (used for
+	// visitor-facing redirects).
+	allowedOrigins := strings.Split(cfg.FrontendOrigin, ",")
+	for i := range allowedOrigins {
+		allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i])
+	}
+	publicFrontend := allowedOrigins[len(allowedOrigins)-1]
+
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{cfg.FrontendOrigin},
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		// "ngrok-skip-browser-warning" bypasses ngrok's free-tier
+		// interstitial page on browser requests.
+		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "ngrok-skip-browser-warning"},
 		ExposedHeaders:   []string{"X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -58,7 +79,7 @@ func NewRouter(
 	r.Get("/healthz", handleHealthz)
 	r.Get("/readyz", handleReadyz(db))
 
-	// Rate limiters (PRD 9.9). A limit of 0 disables a limiter.
+	// Rate limiters (PRD 9.9).
 	rlLimit := func(n int) int {
 		if cfg.RateLimitEnabled {
 			return n
@@ -73,10 +94,11 @@ func NewRouter(
 
 	// Feature handlers.
 	authSvc := auth.NewService(db, auth.ServiceConfig{
-		JWTSecret:    cfg.JWTSecret,
-		AccessTTL:    cfg.JWTAccessTTL,
-		RefreshTTL:   cfg.JWTRefreshTTL,
-		CookieSecure: cfg.AppEnv != "development",
+		JWTSecret:          cfg.JWTSecret,
+		AccessTTL:          cfg.JWTAccessTTL,
+		RefreshTTL:         cfg.JWTRefreshTTL,
+		CookieSecure:       cfg.AppEnv != "development",
+		CookieSameSiteNone: strings.EqualFold(cfg.CookieSameSite, "none"),
 	})
 	authHandler := auth.NewHandler(authSvc, logger)
 
@@ -98,14 +120,13 @@ func NewRouter(
 	publicHandler := publicapi.NewHandler(db, linkSvc, logger)
 
 	redirectSvc := redirect.NewService(db)
-	redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, cfg.FrontendOrigin)
+	redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, publicFrontend)
 
-	// Public redirect engine: GET /{code}, IP rate limited (PRD 9.5, 9.9).
+	// Public redirect engine.
 	r.With(redirectRL.Middleware(ratelimit.KeyIP)).
 		Get("/{code}", redirectHandler.Resolve)
 
-	// Public API (PRD 9.8): API-key authenticated, rate limited per key,
-	// mutations audited with the key's identity.
+	// Public API.
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Use(apikeySvc.RequireKey)
 		r.Use(publicRL.Middleware(func(r *http.Request) string {
@@ -135,8 +156,6 @@ func NewRouter(
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			// Login, register, logout are audited + IP rate limited
-			// (PRD 9.9, 9.10).
 			r.With(registerRL.Middleware(ratelimit.KeyIP)).
 				With(auditSvc.TrackAction("auth.register", "user")).
 				Post("/register", authHandler.Register)
@@ -153,7 +172,6 @@ func NewRouter(
 			})
 		})
 
-		// Authenticated routes: rate limited per user (600/min).
 		r.Group(func(r chi.Router) {
 			r.Use(authSvc.RequireAuth)
 			r.Use(dashboardRL.Middleware(func(r *http.Request) string {
@@ -172,7 +190,6 @@ func NewRouter(
 				r.Get("/", tenantHandler.List)
 
 				r.Route("/{tenantId}", func(r chi.Router) {
-					// Membership gate + mutation auditing (PRD 9.3, 9.10).
 					r.Use(tenantSvc.RequireMembership())
 					r.Use(auditSvc.TrackMutations)
 
@@ -192,7 +209,6 @@ func NewRouter(
 					r.Get("/api-keys", apikeyHandler.List)
 					r.Delete("/api-keys/{keyId}", apikeyHandler.Revoke)
 
-					// Audit history (PRD 9.10) — read-only, append-only log.
 					r.Get("/audit-logs", auditHandler.List)
 
 					r.Route("/links", func(r chi.Router) {

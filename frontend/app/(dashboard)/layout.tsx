@@ -138,14 +138,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      {/* Sidebar */}
+    // h-dvh + overflow-hidden: the app never scrolls as a whole.
+    // The sidebar is completely static; ONLY the content column scrolls.
+    <div className="flex h-dvh overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      {/* Sidebar — fixed width, fixed height, never resizes */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex">
-        <div className="p-5">
+        <div className="shrink-0 p-5">
           <Logo />
         </div>
 
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3">
           {NAV.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const base = `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -180,8 +182,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User card + version */}
-        <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+        {/* User card + version — pinned to the bottom */}
+        <div className="shrink-0 border-t border-zinc-200 p-4 dark:border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white">
               {(user?.name ?? "?").charAt(0).toUpperCase()}
@@ -203,16 +205,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               <LogOut className="h-4 w-4" />
             </button>
           </div>
-          {/* Version — always visible to users (product requirement). */}
+          {/* Version — always visible to users. */}
           <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
             LinkPulse v{APP_VERSION}
           </p>
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
+      {/* Content column — the ONLY scrollable area */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="lg:hidden">
               <Logo />
@@ -232,7 +234,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

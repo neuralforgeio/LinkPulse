@@ -1,3 +1,11 @@
+// Thin fetch wrapper around the LinkPulse API.
+//
+// Responsibilities:
+//   - attach the in-memory access token as a Bearer header
+//   - refresh the token (single-flight) when it expires or a request
+//     comes back 401, then retry once
+//   - unwrap the backend envelope: { success, data } | { success, error }
+
 import {
   clearToken,
   getToken,
@@ -34,16 +42,14 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-// Single-flight refresh: when several requests hit 401 at once, they all
-// share ONE refresh call. This is not an optimization — it is required.
-// Our refresh tokens rotate, so two parallel refreshes would make the
-// second one replay a revoked token, triggering the backend's reuse
-// detection and revoking EVERY session of the user.
+// Single-flight refresh: concurrent 401s share ONE refresh call. This
+// matters because refresh tokens rotate — two parallel refreshes would
+// trigger the backend's reuse detection and revoke every session.
 let refreshInFlight: Promise<string | null> | null = null;
 
 /**
- * Refreshes the access token via the HttpOnly cookie.
- * Returns the new token, or null when there is no valid session.
+ * Refreshes the access token via the HttpOnly cookie. Returns the new
+ * token, or null when there is no valid session.
  */
 export async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
@@ -53,6 +59,10 @@ export async function refreshAccessToken(): Promise<string | null> {
       const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
         method: "POST",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       const body = (await res.json()) as Envelope<{
         access_token: string;
@@ -82,6 +92,7 @@ async function request(
 ): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
     ...options.headers,
   };
   if (token) headers.Authorization = `Bearer ${token}`;
