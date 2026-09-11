@@ -45,15 +45,17 @@ interface AuthContextValue {
   defaultTenantId: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetches /me — call after profile or workspace changes so the
+      sidebar and switcher reflect them immediately. */
+  reload: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
  * Owns the client-side session: the in-memory access token (held by
- * token-store) plus the user profile and workspaces. On mount it
- * recovers the session from the HttpOnly refresh cookie via a silent
- * refresh — that is why a page reload keeps you logged in.
+ * token-store) plus the user profile. On mount it recovers the session
+ * from the HttpOnly refresh cookie via a silent refresh.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
@@ -114,9 +116,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("guest");
   }, []);
 
+  const reload = useCallback(async () => {
+    try {
+      const me = await api<MeResponse>("/api/v1/auth/me");
+      setUser(me.user);
+      setTenants(me.tenants);
+      setDefaultTenantId(me.default_tenant_id);
+    } catch {
+      // Keep the current state on failure — a full reload retries.
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ status, user, tenants, defaultTenantId, login, logout }}
+      value={{ status, user, tenants, defaultTenantId, login, logout, reload }}
     >
       {children}
     </AuthContext.Provider>
