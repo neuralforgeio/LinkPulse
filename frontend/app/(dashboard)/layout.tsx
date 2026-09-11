@@ -16,6 +16,7 @@ import {
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth/auth-provider";
+import { APP_VERSION } from "@/lib/version";
 import {
   ActiveWorkspaceProvider,
   useActiveWorkspace,
@@ -179,7 +180,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User card */}
+        {/* User card + version */}
         <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white">
@@ -202,6 +203,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+          {/* Version — always visible to users (product requirement). */}
+          <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
+            LinkPulse v{APP_VERSION}
+          </p>
         </div>
       </aside>
 

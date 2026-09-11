@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# Logs
+backend/logs/
+
 # Go
 backend/bin/
 
@@ -16,8 +19,3 @@ out/
 Thumbs.db
 .vscode/
 .idea/
-
-# Logs
-backend/logs/
-
-catatan.txt

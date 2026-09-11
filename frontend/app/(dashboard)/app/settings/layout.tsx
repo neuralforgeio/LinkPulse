@@ -5,6 +5,7 @@ const TABS = [
   { label: "General", href: null, enabled: false },
   { label: "Profile", href: null, enabled: false },
   { label: "API Keys", href: "/app/settings/api-keys", enabled: true },
+  { label: "Audit", href: "/app/settings/audit", enabled: true },
 ];
 
 export default function SettingsLayout({
