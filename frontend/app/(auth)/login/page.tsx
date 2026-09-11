@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, KeyRound, Mail } from "lucide-react";
+import { Eye, EyeOff, Mail, ShieldCheck } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -224,9 +224,13 @@ export default function LoginPage() {
       ) : (
         <>
           <FadeIn>
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400">
-              <Mail className="h-7 w-7" />
-            </div>
+            <motion.div
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-600/30"
+            >
+              <Mail className="h-7 w-7 text-white" />
+            </motion.div>
             <h1 className="mt-4 text-center text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Check your email
             </h1>
@@ -243,18 +247,21 @@ export default function LoginPage() {
             <FadeIn delay={0.08}>
               <div className="flex justify-center gap-2">
                 {otp.map((digit, i) => (
-                  <input
+                  <motion.input
                     key={i}
                     ref={(el) => {
                       otpRefs.current[i] = el;
                     }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 + i * 0.05 }}
                     inputMode="numeric"
                     maxLength={1}
                     value={digit}
                     onChange={(e) => setOtpDigit(i, e.target.value)}
                     onKeyDown={(e) => onOtpKeyDown(i, e)}
                     onPaste={onOtpPaste}
-                    className={`h-12 w-11 rounded-lg border text-center text-xl font-bold text-zinc-900 shadow-sm transition dark:text-white ${
+                    className={`h-13 w-12 rounded-xl border text-center text-xl font-bold shadow-sm transition dark:text-white ${
                       error
                         ? "border-rose-400 bg-rose-50 dark:border-rose-600 dark:bg-rose-950/30"
                         : "border-zinc-300 bg-zinc-100 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700 dark:bg-zinc-800/50 dark:focus:border-blue-500 dark:focus:bg-zinc-900"
@@ -280,13 +287,19 @@ export default function LoginPage() {
 
             <FadeIn delay={0.16}>
               <Button type="submit" loading={loading} className="w-full py-3">
-                <KeyRound className="h-4 w-4" />
                 Verify code
               </Button>
             </FadeIn>
+
+            <FadeIn delay={0.24}>
+              <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
+                <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
+                Code expires in 10 minutes &middot; single use only
+              </p>
+            </FadeIn>
           </form>
 
-          <FadeIn delay={0.24}>
+          <FadeIn delay={0.32}>
             <p className="mt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
               Didn&apos;t get a code?{" "}
               <button

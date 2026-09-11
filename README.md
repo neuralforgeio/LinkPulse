@@ -13,7 +13,7 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql)
 
-*Shorten links. Track every click. Own your data.*
+_Shorten links. Track every click. Own your data._
 
 [Features](#-features) · [Architecture](#-architecture) · [Quick Start](#-quick-start) · [API](#-api-overview)
 
@@ -29,6 +29,8 @@ Built to be owned: self-hosted, MIT licensed, zero vendor lock-in.
 
 ## ✨ Features
 
+- **Email OTP login** — two-step login with a 6-digit code (Resend, with dev-log fallback)
+- **Password reset via email OTP** — one-time codes, 10-minute expiry, session revocation
 - **Short links** — custom aliases, random base62 codes, expiry, click limits, password protection, UTM builder
 - **Async click tracking** — redirects never wait for analytics: in-memory buffer, batch inserts, graceful-shutdown flush
 - **Analytics** — clicks over time, unique visitor estimates (salted IP hashes), top referrers / devices / browsers / OS / campaigns
@@ -55,12 +57,12 @@ Browser ──▶ Next.js dashboard (:3000) ──▶ Go API (:8080) ──▶ P
 
 ## 🧰 Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend | Go 1.27 · chi · pgx/v5 · slog |
+| Layer    | Technology                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| Backend  | Go 1.27 · chi · pgx/v5 · slog                                                                   |
 | Frontend | Next.js 16 (App Router) · TypeScript · Tailwind CSS · TanStack Query · Recharts · framer-motion |
-| Database | PostgreSQL 16+ · Goose migrations |
-| Auth | JWT access tokens · rotating refresh tokens · Argon2id |
+| Database | PostgreSQL 16+ · Goose migrations                                                               |
+| Auth     | JWT access tokens · rotating refresh tokens · Argon2id                                          |
 
 ## 🚀 Quick Start
 
@@ -85,37 +87,37 @@ npm run dev                         # → http://localhost:3000
 
 ### Backend (`backend/.env`)
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | *required* | PostgreSQL connection string |
-| `JWT_SECRET` | *required* | Token signing secret |
-| `APP_PORT` | `8080` | HTTP port |
-| `FRONTEND_ORIGIN` | `http://localhost:3000` | Allowed CORS origin |
-| `CLICK_SALT` | random per boot | Salt for IP hashing |
-| `CLICK_BUFFER_SIZE` / `CLICK_FLUSH_INTERVAL_MS` / `CLICK_FLUSH_BATCH_SIZE` | 5000 / 1000 / 500 | Click pipeline tuning |
-| `RATE_LIMIT_ENABLED` + `RATE_LIMIT_*_PER_MINUTE` | see `.env.example` | Redirect 100 · login 10 · register 5 · public API 300 · dashboard 600 |
-| `LOG_DIR` / `LOG_FORMAT` | `logs` / `pretty` | Daily JSON log files + colored console |
+| Variable                                                                   | Default                 | Description                                                           |
+| -------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------- |
+| `DATABASE_URL`                                                             | _required_              | PostgreSQL connection string                                          |
+| `JWT_SECRET`                                                               | _required_              | Token signing secret                                                  |
+| `APP_PORT`                                                                 | `8080`                  | HTTP port                                                             |
+| `FRONTEND_ORIGIN`                                                          | `http://localhost:3000` | Allowed CORS origin                                                   |
+| `CLICK_SALT`                                                               | random per boot         | Salt for IP hashing                                                   |
+| `CLICK_BUFFER_SIZE` / `CLICK_FLUSH_INTERVAL_MS` / `CLICK_FLUSH_BATCH_SIZE` | 5000 / 1000 / 500       | Click pipeline tuning                                                 |
+| `RATE_LIMIT_ENABLED` + `RATE_LIMIT_*_PER_MINUTE`                           | see `.env.example`      | Redirect 100 · login 10 · register 5 · public API 300 · dashboard 600 |
+| `LOG_DIR` / `LOG_FORMAT`                                                   | `logs` / `pretty`       | Daily JSON log files + colored console                                |
 
 ### Frontend (`frontend/.env.local`)
 
-| Variable | Default | Description |
-|---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | Backend base URL |
-| `NEXT_PUBLIC_DEMO_MODE` | `false` | Mock data — no backend needed |
+| Variable                   | Default                 | Description                   |
+| -------------------------- | ----------------------- | ----------------------------- |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | Backend base URL              |
+| `NEXT_PUBLIC_DEMO_MODE`    | `false`                 | Mock data — no backend needed |
 
 ## 📡 API Overview
 
-| Area | Endpoints |
-|---|---|
-| Auth | `POST /api/v1/auth/register · login · refresh · logout` · `GET /me` |
-| Workspaces | `POST/GET /tenants` · members & roles · invitations · leave |
-| Links | `POST/GET/PATCH/DELETE /tenants/{id}/links` — search, filters, sort, pagination |
-| Analytics | `GET /tenants/{id}/analytics/overview` — time series + top rankings |
-| API keys | `POST/GET/DELETE /tenants/{id}/api-keys` — scoped, one-time reveal |
-| Public API | `/api/v1/public/links` — Bearer `lp_live_…`, scope-enforced |
-| Redirect | `GET /{code}` → `302` · `410` for expired / disabled / limit-reached |
-| Audit | `GET /tenants/{id}/audit-logs` — append-only history |
-| Health | `GET /healthz` · `GET /readyz` |
+| Area       | Endpoints                                                                       |
+| ---------- | ------------------------------------------------------------------------------- |
+| Auth       | `POST /api/v1/auth/register · login · refresh · logout` · `GET /me`             |
+| Workspaces | `POST/GET /tenants` · members & roles · invitations · leave                     |
+| Links      | `POST/GET/PATCH/DELETE /tenants/{id}/links` — search, filters, sort, pagination |
+| Analytics  | `GET /tenants/{id}/analytics/overview` — time series + top rankings             |
+| API keys   | `POST/GET/DELETE /tenants/{id}/api-keys` — scoped, one-time reveal              |
+| Public API | `/api/v1/public/links` — Bearer `lp_live_…`, scope-enforced                     |
+| Redirect   | `GET /{code}` → `302` · `410` for expired / disabled / limit-reached            |
+| Audit      | `GET /tenants/{id}/audit-logs` — append-only history                            |
+| Health     | `GET /healthz` · `GET /readyz`                                                  |
 
 ## 🧪 Testing
 
@@ -126,10 +128,12 @@ go test ./internal/...    # shortid, URL validation, UTM merge, rate limiter
 
 ## 🗺 Roadmap
 
-- [x] Core: auth · multi-tenancy · links · redirect engine · analytics · API keys · audit log · rate limiting
-- [ ] Password-protected link flow (frontend UI)
-- [ ] Bulk import / export (CSV)
-- [ ] Redis-backed distributed rate limiting
+- [v] Core: auth · multi-tenancy · links · redirect · analytics · API keys · audit · rate limiting
+- [v] Password-protected links with 6-digit OTP + email reset flow
+- [v] Email OTP login (Resend)
+- [v] Settings (General, Profile, Members, API Keys, Audit)
+- [v] Bulk import/export CSV
+- [] Redis-backed distributed rate limiting
 
 ## ⚠️ Known Limitations
 

@@ -156,12 +156,12 @@ export default function Home() {
             </FadeIn>
 
             <FadeIn delay={0.2}>
-              <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-                The shortener you&apos;ll actually{" "}
+              <h1 className="shimmer mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+                Short links.{" "}
                 <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400">
-                  own
-                </span>
-                .
+                  Real analytics.
+                </span>{" "}
+                Full control.
               </h1>
             </FadeIn>
 
