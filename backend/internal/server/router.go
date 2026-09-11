@@ -54,10 +54,7 @@ func NewRouter(
     r.Use(requestLogger(logger))
     r.Use(middleware.Recoverer)
 
-    // CORS allowlist: FRONTEND_ORIGIN supports a comma-separated list,
-    // e.g. "http://localhost:3000,https://linkpulseshort.vercel.app".
-    // The last entry is treated as the public deployment (used for
-    // visitor-facing redirects).
+    // CORS allowlist: FRONTEND_ORIGIN supports a comma-separated list.
     allowedOrigins := strings.Split(cfg.FrontendOrigin, ",")
     for i := range allowedOrigins {
         allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i])
@@ -67,10 +64,8 @@ func NewRouter(
     r.Use(cors.Handler(cors.Options{
         AllowedOrigins: allowedOrigins,
         AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-        // "ngrok-skip-browser-warning" bypasses ngrok's free-tier
-        // interstitial page on browser requests.
-        AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "ngrok-skip-browser-warning"},
-        ExposedHeaders:   []string{"X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
+        AllowedHeaders: []string{"Accept", "Content-Type", "Authorization", "ngrok-skip-browser-warning"},
+        ExposedHeaders: []string{"X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
         AllowCredentials: true,
         MaxAge:           300,
     }))
@@ -79,7 +74,7 @@ func NewRouter(
     r.Get("/healthz", handleHealthz)
     r.Get("/readyz", handleReadyz(db))
 
-    // Rate limiters (PRD 9.9). A limit of 0 disables a limiter.
+    // Rate limiters (PRD 9.9).
     rlLimit := func(n int) int {
         if cfg.RateLimitEnabled {
             return n
@@ -120,44 +115,56 @@ func NewRouter(
     publicHandler := publicapi.NewHandler(db, linkSvc, logger)
 
     redirectSvc := redirect.NewService(db)
-    redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, clickSalt, publicFrontend)
+    redirectHandler := redirect.NewHandler(redirectSvc, clickBuf, logger, redirect.HandlerConfig{
+        IPSalt:             clickSalt,
+        FrontendOrigin:     publicFrontend,
+        JWTSecret:          cfg.JWTSecret,
+        CookieSecure:       cfg.AppEnv != "development",
+        CookieSameSiteNone: strings.EqualFold(cfg.CookieSameSite, "none"),
+    })
 
     // Public redirect engine: GET /{code}, IP rate limited (PRD 9.5, 9.9).
     r.With(redirectRL.Middleware(ratelimit.KeyIP)).
         Get("/{code}", redirectHandler.Resolve)
 
-    // Public API (PRD 9.8): API-key authenticated, rate limited per key,
-    // mutations audited with the key's identity.
+    // Public API (PRD 9.8).
     r.Route("/api/v1/public", func(r chi.Router) {
-        r.Use(apikeySvc.RequireKey)
-        r.Use(publicRL.Middleware(func(r *http.Request) string {
-            if a, ok := apikey.FromContext(r.Context()); ok {
-                return a.KeyID.String()
-            }
-            return ratelimit.KeyIP(r)
-        }))
-        r.Use(auditSvc.TrackMutations)
+        // Visitor endpoint: link password verification — NO API key
+        // (PRD 9.5.3). Rate limited per IP like the redirect itself.
+        r.With(redirectRL.Middleware(ratelimit.KeyIP)).
+            Post("/links/{shortCode}/verify-password", redirectHandler.VerifyPassword)
 
+        // API-key endpoints.
         r.Group(func(r chi.Router) {
-            r.Use(apikeySvc.RequireScope(apikey.ScopeLinksRead))
-            r.Get("/links", publicHandler.ListLinks)
-            r.Get("/links/{shortCode}", publicHandler.GetLink)
-        })
-        r.Group(func(r chi.Router) {
-            r.Use(apikeySvc.RequireScope(apikey.ScopeLinksWrite))
-            r.Post("/links", publicHandler.CreateLink)
-            r.Patch("/links/{shortCode}", publicHandler.UpdateLink)
-            r.Delete("/links/{shortCode}", publicHandler.DeleteLink)
-        })
-        r.Group(func(r chi.Router) {
-            r.Use(apikeySvc.RequireScope(apikey.ScopeAnalyticsRead))
-            r.Get("/links/{shortCode}/analytics", publicHandler.LinkAnalytics)
+            r.Use(apikeySvc.RequireKey)
+            r.Use(publicRL.Middleware(func(r *http.Request) string {
+                if a, ok := apikey.FromContext(r.Context()); ok {
+                    return a.KeyID.String()
+                }
+                return ratelimit.KeyIP(r)
+            }))
+            r.Use(auditSvc.TrackMutations)
+
+            r.Group(func(r chi.Router) {
+                r.Use(apikeySvc.RequireScope(apikey.ScopeLinksRead))
+                r.Get("/links", publicHandler.ListLinks)
+                r.Get("/links/{shortCode}", publicHandler.GetLink)
+            })
+            r.Group(func(r chi.Router) {
+                r.Use(apikeySvc.RequireScope(apikey.ScopeLinksWrite))
+                r.Post("/links", publicHandler.CreateLink)
+                r.Patch("/links/{shortCode}", publicHandler.UpdateLink)
+                r.Delete("/links/{shortCode}", publicHandler.DeleteLink)
+            })
+            r.Group(func(r chi.Router) {
+                r.Use(apikeySvc.RequireScope(apikey.ScopeAnalyticsRead))
+                r.Get("/links/{shortCode}/analytics", publicHandler.LinkAnalytics)
+            })
         })
     })
 
     r.Route("/api/v1", func(r chi.Router) {
         r.Route("/auth", func(r chi.Router) {
-            // Login, register, logout are audited + IP rate limited.
             r.With(registerRL.Middleware(ratelimit.KeyIP)).
                 With(auditSvc.TrackAction("auth.register", "user")).
                 Post("/register", authHandler.Register)
@@ -175,7 +182,6 @@ func NewRouter(
             })
         })
 
-        // Authenticated routes: rate limited per user (600/min).
         r.Group(func(r chi.Router) {
             r.Use(authSvc.RequireAuth)
             r.Use(dashboardRL.Middleware(func(r *http.Request) string {
