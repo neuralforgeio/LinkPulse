@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"linkpulse/internal/email"
 	"linkpulse/internal/httpx"
 	"linkpulse/internal/tenant"
 )
@@ -29,9 +30,7 @@ type ServiceConfig struct {
 	AccessTTL    time.Duration
 	RefreshTTL   time.Duration
 	CookieSecure bool
-	// CookieSameSiteNone is for cross-domain deployments (frontend and
-	// API on different sites): the session cookie becomes
-	// SameSite=None + Secure so it can travel between them.
+	// CookieSameSiteNone is for cross-domain deployments.
 	CookieSameSiteNone bool
 }
 
@@ -47,8 +46,6 @@ type Service struct {
 
 // NewService builds an auth Service.
 func NewService(db *pgxpool.Pool, cfg ServiceConfig) *Service {
-	// SameSite=None requires Secure (browser rule) — cross-domain
-	// deployments are always HTTPS, so forcing it is safe.
 	secure := cfg.CookieSecure || cfg.CookieSameSiteNone
 	return &Service{
 		db:                 db,
@@ -97,8 +94,7 @@ var ErrEmailTaken = &httpx.UserError{
 var emailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 // Register creates a user, their default workspace, and an owner
-// membership — all in ONE transaction, so a failure anywhere rolls
-// everything back (PRD 9.1.1).
+// membership — all in ONE transaction (PRD 9.1.1).
 func (s *Service) Register(ctx context.Context, in RegisterInput) (RegisterResult, error) {
 	name := strings.TrimSpace(in.Name)
 	email := strings.ToLower(strings.TrimSpace(in.Email))
@@ -219,13 +215,14 @@ func hasDigit(s string) bool {
 
 // Handler exposes auth flows over HTTP.
 type Handler struct {
-	svc *Service
-	log *slog.Logger
+	svc    *Service
+	log    *slog.Logger
+	mailer *email.Sender
 }
 
 // NewHandler builds the auth HTTP handler.
-func NewHandler(svc *Service, log *slog.Logger) *Handler {
-	return &Handler{svc: svc, log: log}
+func NewHandler(svc *Service, log *slog.Logger, mailer *email.Sender) *Handler {
+	return &Handler{svc: svc, log: log, mailer: mailer}
 }
 
 // Register handles POST /api/v1/auth/register.
