@@ -1,200 +1,207 @@
 package auth
 
 import (
-    "context"
-    "crypto/sha256"
-    "encoding/hex"
-    "encoding/json"
-    "errors"
-    "log/slog"
-    "net/http"
-    "strings"
-    "time"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math/big"
+	"net/http"
+	"strings"
+	"time"
 
-    "github.com/google/uuid"
-    "github.com/jackc/pgx/v5"
-    "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/google/uuid"
 
-    "linkpulse/internal/httpx"
-    "linkpulse/internal/shortid"
+	"linkpulse/internal/httpx"
 )
 
-// resetTokenTTL is how long a reset link stays valid (PRD 9.1.7).
-const resetTokenTTL = 30 * time.Minute
+const (
+	resetOtpTTL         = 10 * time.Minute
+	resetOtpMaxAttempts = 5
+)
 
-// ResetHandler serves the password reset endpoints. It deliberately
-// does NOT reuse the session machinery — reset works without a session.
-type ResetHandler struct {
-    db             *pgxpool.Pool
-    log            *slog.Logger
-    resetLinkBase  string // frontend origin used to build reset links
+var errResetOtpInvalid = &httpx.UserError{
+	Status:  http.StatusUnauthorized,
+	Code:    httpx.CodeInvalidToken,
+	Message: "invalid or expired code",
 }
 
-// NewResetHandler builds the reset handler. resetLinkBase is the
-// frontend origin the reset link points at.
-func NewResetHandler(db *pgxpool.Pool, log *slog.Logger, resetLinkBase string) *ResetHandler {
-    return &ResetHandler{db: db, log: log, resetLinkBase: resetLinkBase}
+// hashResetOtp peppers the code with the JWT secret — a leaked DB
+// alone cannot brute-force it.
+func (s *Service) hashResetOtp(code string) string {
+	sum := sha256.Sum256([]byte("reset:" + s.jwtSecret + ":" + code))
+	return hex.EncodeToString(sum[:])
 }
 
-// ResetRequestInput is the body for POST /api/v1/auth/password/reset-request.
-type ResetRequestInput struct {
-    Email string `json:"email"`
+// generateResetOtpCode returns a uniformly random 6-digit code.
+func generateResetOtpCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", fmt.Errorf("rand: %w", err)
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
-// ResetConfirmInput is the body for POST /api/v1/auth/password/reset-confirm.
+// RequestResetInput is the body for POST /auth/password/reset-request.
+type RequestResetInput struct {
+	Email string `json:"email"`
+}
+
+// RequestReset issues a reset code. The response is ALWAYS identical
+// whether the email exists (PRD 9.1.7 anti-enumeration) — delivery
+// happens here, not at verify time.
+func (s *Service) RequestReset(ctx context.Context, email string) (rawCode string, ok bool) {
+	var userID uuid.UUID
+	err := s.db.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = $1`, email,
+	).Scan(&userID)
+	if err != nil {
+		return "", false
+	}
+
+	rawCode, err = generateResetOtpCode()
+	if err != nil {
+		return "", false
+	}
+
+	// One pending code per user.
+	_, _ = s.db.Exec(ctx,
+		`UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL`, userID)
+	_, _ = s.db.Exec(ctx, `
+        INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3, $4)`,
+		uuid.New(), userID, s.hashResetOtp(rawCode), time.Now().Add(resetOtpTTL))
+
+	return rawCode, true
+}
+
+// ResetConfirmInput is the body for POST /auth/password/reset-confirm.
 type ResetConfirmInput struct {
-    Token    string `json:"token"`
-    Password string `json:"password"`
+	Email    string `json:"email"`
+	Code     string `json:"code"`
+	Password string `json:"password"`
 }
 
-// RequestReset handles POST /api/v1/auth/password/reset-request.
-// The response is ALWAYS the same, whether or not the email exists —
-// never leak account existence (PRD 9.1.7).
-func (h *ResetHandler) RequestReset(w http.ResponseWriter, r *http.Request) {
-    r.Body = http.MaxBytesReader(w, r.Body, 2048)
-    var in ResetRequestInput
-    if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
-        return
-    }
-
-    email := strings.ToLower(strings.TrimSpace(in.Email))
-    if emailRegex.MatchString(email) {
-        var userID uuid.UUID
-        err := h.db.QueryRow(r.Context(),
-            `SELECT id FROM users WHERE email = $1`, email,
-        ).Scan(&userID)
-        if err == nil {
-            raw, hash, terr := newResetToken()
-            if terr == nil {
-                _, ierr := h.db.Exec(r.Context(), `
-                    INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
-                    VALUES ($1, $2, $3, $4)`,
-                    uuid.New(), userID, hash, time.Now().Add(resetTokenTTL))
-                if ierr == nil {
-                    // Dev mode delivery: the link goes to the log (PRD 9.1.7).
-                    h.log.Info("password reset link generated",
-                        "link", h.resetLinkBase+"/reset-password?token="+raw)
-                } else {
-                    h.log.Error("reset token insert failed", "error", ierr)
-                }
-            } else {
-                h.log.Error("reset token generation failed", "error", terr)
-            }
-        }
-        // Lookup failures are swallowed on purpose: identical responses
-        // regardless of the email's existence.
-    }
-
-    httpx.Success(w, http.StatusOK, map[string]string{
-        "message": "If an account exists for that email, a reset link has been sent.",
-    })
-}
-
-// ConfirmReset handles POST /api/v1/auth/password/reset-confirm.
-func (h *ResetHandler) ConfirmReset(w http.ResponseWriter, r *http.Request) {
-    r.Body = http.MaxBytesReader(w, r.Body, 2048)
-    var in ResetConfirmInput
-    if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
-        return
-    }
-
-    token := strings.TrimSpace(in.Token)
-    if token == "" {
-        httpx.Error(w, http.StatusUnprocessableEntity, httpx.CodeValidationError, "token is required")
-        return
-    }
-    if len(in.Password) < 8 || !hasLetter(in.Password) || !hasDigit(in.Password) {
-        httpx.Error(w, http.StatusUnprocessableEntity, httpx.CodeValidationError,
-            "password must be at least 8 characters with letters and numbers")
-        return
-    }
-
-    var (
-        resetID   uuid.UUID
-        userID    uuid.UUID
-        expiresAt time.Time
-        usedAt    *time.Time
-    )
-    err := h.db.QueryRow(r.Context(), `
-        SELECT id, user_id, expires_at, used_at
+// ConfirmReset validates the code and sets the new password.
+func (s *Service) ConfirmReset(ctx context.Context, in ResetConfirmInput) error {
+	var (
+		resetID   uuid.UUID
+		userID    uuid.UUID
+		codeHash  string
+		expiresAt time.Time
+		usedAt    *time.Time
+	)
+	err := s.db.QueryRow(ctx, `
+        SELECT id, user_id, token_hash, expires_at, used_at
         FROM password_reset_tokens
-        WHERE token_hash = $1`, hashResetToken(token),
-    ).Scan(&resetID, &userID, &expiresAt, &usedAt)
-    if errors.Is(err, pgx.ErrNoRows) {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeInvalidToken, "invalid or expired reset token")
-        return
-    }
-    if err != nil {
-        h.log.Error("reset token lookup failed", "error", err)
-        httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
-        return
-    }
-    if usedAt != nil {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeInvalidToken, "this reset token has already been used")
-        return
-    }
-    if time.Now().After(expiresAt) {
-        httpx.Error(w, http.StatusBadRequest, httpx.CodeInvalidToken, "this reset token has expired")
-        return
-    }
+        WHERE user_id = (SELECT id FROM users WHERE email = $1)
+        ORDER BY created_at DESC
+        LIMIT 1`, strings.ToLower(strings.TrimSpace(in.Email)),
+	).Scan(&resetID, &userID, &codeHash, &expiresAt, &usedAt)
+	if err != nil {
+		return errResetOtpInvalid
+	}
 
-    newHash, err := HashPassword(in.Password)
-    if err != nil {
-        h.log.Error("reset password hash failed", "error", err)
-        httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
-        return
-    }
+	if time.Now().After(expiresAt) || usedAt != nil {
+		return errResetOtpInvalid
+	}
 
-    _, err = h.db.Exec(r.Context(),
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
-        newHash, userID)
-    if err != nil {
-        h.log.Error("reset password update failed", "error", err)
-        httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
-        return
-    }
+	if s.hashResetOtp(strings.TrimSpace(in.Code)) != codeHash {
+		return errResetOtpInvalid
+	}
 
-    _, err = h.db.Exec(r.Context(),
-        `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, resetID)
-    if err != nil {
-        h.log.Error("reset token consume failed", "error", err)
-        httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
-        return
-    }
+	if len(in.Password) < 8 || !hasLetter(in.Password) || !hasDigit(in.Password) {
+		return &httpx.UserError{
+			Status:  http.StatusUnprocessableEntity,
+			Code:    httpx.CodeValidationError,
+			Message: "password must be at least 8 characters with letters and numbers",
+		}
+	}
 
-    // PRD 9.1.8: a successful reset revokes every session.
-    _, err = h.db.Exec(r.Context(),
-        `UPDATE refresh_tokens SET revoked_at = NOW()
-         WHERE user_id = $1 AND revoked_at IS NULL`, userID)
-    if err != nil {
-        h.log.Error("reset session revocation failed", "error", err)
-        httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
-        return
-    }
+	newHash, err := HashPassword(in.Password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
 
-    httpx.Success(w, http.StatusOK, map[string]string{
-        "message": "Password updated. All sessions have been revoked — please sign in again.",
-    })
+	if _, err := s.db.Exec(ctx,
+		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+		newHash, userID); err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+
+	if _, err := s.db.Exec(ctx,
+		`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, resetID); err != nil {
+		return fmt.Errorf("consume token: %w", err)
+	}
+
+	// PRD 9.1.8: revoke every session on reset.
+	_, _ = s.db.Exec(ctx,
+		`UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
+
+	return nil
 }
 
-// newResetToken returns (raw, hash): raw goes into the reset link,
-// only the SHA-256 hash is stored. Like refresh tokens, the raw value
-// is 256 random bits — a fast hash is sufficient.
-func newResetToken() (raw, hash string, err error) {
-    secret, err := shortid.New(32)
-    if err != nil {
-        return "", "", err
-    }
-    raw = "lp_reset_" + secret
-    return raw, hashResetToken(raw), nil
+// RequestResetHandler handles POST /api/v1/auth/password/reset-request.
+// Always the same generic response (PRD 9.1.7).
+func (h *Handler) RequestReset(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	var in RequestResetInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
+		return
+	}
+
+	email := strings.ToLower(strings.TrimSpace(in.Email))
+	if !emailRegex.MatchString(email) {
+		// Generic response even for invalid emails.
+		httpx.Success(w, http.StatusOK, map[string]string{
+			"message": "If an account exists, a reset code has been sent.",
+		})
+		return
+	}
+
+	rawCode, ok := h.svc.RequestReset(r.Context(), email)
+	if ok {
+		if err := h.mailer.Send(r.Context(), email,
+			"Your LinkPulse password reset code", otpEmailHTML(rawCode)); err != nil {
+			h.log.Error("reset email send failed", "error", err)
+			httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "could not send the code, try again")
+			return
+		}
+		if h.mailer.InDevMode() {
+			h.log.Info("reset otp code (dev mode)", "email", email, "code", rawCode)
+		}
+	}
+
+	httpx.Success(w, http.StatusOK, map[string]string{
+		"message": "If an account exists, a reset code has been sent.",
+	})
 }
 
-func hashResetToken(raw string) string {
-    sum := sha256.Sum256([]byte(raw))
-    return hex.EncodeToString(sum[:])
-}
+// ConfirmResetHandler handles POST /api/v1/auth/password/reset-confirm.
+func (h *Handler) ConfirmReset(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	var in ResetConfirmInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		httpx.Error(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid JSON body")
+		return
+	}
 
-// unused import guard: context is used by future query helpers.
-var _ = context.Background
+	if err := h.svc.ConfirmReset(r.Context(), in); err != nil {
+		var uerr *httpx.UserError
+		if errors.As(err, &uerr) {
+			httpx.Error(w, uerr.Status, uerr.Code, uerr.Message)
+			return
+		}
+		h.log.Error("reset confirm failed", "error", err)
+		httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "internal error")
+		return
+	}
+
+	httpx.Success(w, http.StatusOK, map[string]string{
+		"message": "Password updated. Please sign in with your new password.",
+	})
+}

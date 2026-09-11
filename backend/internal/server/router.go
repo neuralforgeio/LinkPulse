@@ -99,12 +99,6 @@ func NewRouter(
 	})
 	authHandler := auth.NewHandler(authSvc, logger, mailer)
 
-	resetLinkBase := publicFrontend
-	if cfg.AppEnv == "development" && len(allowedOrigins) > 0 {
-		resetLinkBase = allowedOrigins[0]
-	}
-	resetHandler := auth.NewResetHandler(db, logger, resetLinkBase)
-
 	tenantSvc := tenant.NewService(db, logger)
 	tenantHandler := tenant.NewHandler(tenantSvc, logger)
 
@@ -186,9 +180,9 @@ func NewRouter(
 			r.Post("/refresh", authHandler.Refresh)
 
 			r.With(registerRL.Middleware(ratelimit.KeyIP)).
-				Post("/password/reset-request", resetHandler.RequestReset)
+				Post("/password/reset-request", authHandler.RequestReset)
 			r.With(registerRL.Middleware(ratelimit.KeyIP)).
-				Post("/password/reset-confirm", resetHandler.ConfirmReset)
+				Post("/password/reset-confirm", authHandler.ConfirmReset)
 
 			r.Group(func(r chi.Router) {
 				r.Use(authSvc.RequireAuth)

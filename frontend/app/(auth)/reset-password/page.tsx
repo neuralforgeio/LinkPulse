@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { api, ApiError } from "@/lib/api/client";
@@ -10,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { FadeIn } from "@/components/motion/fade";
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -18,17 +21,21 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Reset links arrive as /reset-password?token=lp_reset_xxx — read it
-  // from the URL on mount (client-side only, no Suspense needed).
+  // Reset links arrive as /reset-password?email=...&token=...
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("token");
+    const params = new URLSearchParams(window.location.search);
+    const e = params.get("email");
+    const t = params.get("token");
+    if (e) setEmail(e);
     if (t) setToken(t);
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!token.trim()) {
-      setError("Please enter the reset token.");
+    setError(null);
+
+    if (!token.trim() || !email.trim()) {
+      setError("Please enter your email and the reset code.");
       return;
     }
     if (
@@ -47,11 +54,14 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    setError(null);
     try {
       await api("/api/v1/auth/password/reset-confirm", {
         method: "POST",
-        body: JSON.stringify({ token: token.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          code: token.trim(),
+          password,
+        }),
       });
       setDone(true);
     } catch (err) {
@@ -99,21 +109,34 @@ export default function ResetPasswordPage() {
           Set a new password
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Paste your reset token and choose a new password.
+          Enter the 6-digit code from your email and a new password.
         </p>
       </FadeIn>
 
       <form className="mt-8 space-y-5" onSubmit={onSubmit} noValidate>
         <FadeIn delay={0.08}>
           <Input
-            label="Reset token"
-            placeholder="lp_reset_..."
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
         </FadeIn>
 
         <FadeIn delay={0.16}>
+          <Input
+            label="Reset code"
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="123456"
+            value={token}
+            onChange={(e) => setToken(e.target.value.replace(/\D/g, ""))}
+          />
+        </FadeIn>
+
+        <FadeIn delay={0.24}>
           <Input
             label="New password"
             type={show ? "text" : "password"}
@@ -139,7 +162,7 @@ export default function ResetPasswordPage() {
           />
         </FadeIn>
 
-        <FadeIn delay={0.24}>
+        <FadeIn delay={0.32}>
           <Input
             label="Confirm new password"
             type={show ? "text" : "password"}
@@ -156,7 +179,7 @@ export default function ResetPasswordPage() {
           </p>
         )}
 
-        <FadeIn delay={0.32}>
+        <FadeIn delay={0.4}>
           <Button type="submit" loading={loading} className="w-full py-3">
             Update password
           </Button>

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Mail } from "lucide-react";
 import { api, ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
         className="text-center"
       >
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
-          <CheckCircle2 className="h-8 w-8" />
+          <Mail className="h-8 w-8" />
         </div>
         <h1 className="mt-5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Check your email
@@ -60,15 +60,17 @@ export default function ForgotPasswordPage() {
           <span className="font-medium text-zinc-700 dark:text-zinc-200">
             {email}
           </span>
-          , a reset link has been sent.
-        </p>
-        <p className="mt-4 rounded-lg bg-zinc-100 px-4 py-3 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-          Development mode: the reset link is written to the backend server log
-          — no email is actually sent.
+          , a 6-digit reset code has been sent.
         </p>
         <Link
+          href={`/reset-password?email=${encodeURIComponent(email)}`}
+          className="mt-6 flex w-full items-center justify-center rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          Continue to reset password
+        </Link>
+        <Link
           href="/login"
-          className="mt-6 inline-block text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
+          className="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
         >
           Back to sign in
         </Link>
@@ -83,7 +85,7 @@ export default function ForgotPasswordPage() {
           Forgot your password?
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Enter your email and we&apos;ll send a reset link.
+          Enter your email and we&apos;ll send a reset code.
         </p>
       </FadeIn>
 
@@ -107,7 +109,7 @@ export default function ForgotPasswordPage() {
 
         <FadeIn delay={0.16}>
           <Button type="submit" loading={loading} className="w-full py-3">
-            Send reset link
+            Send reset code
           </Button>
         </FadeIn>
       </form>

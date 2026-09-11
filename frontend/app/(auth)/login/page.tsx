@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Mail } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,8 @@ export default function LoginPage() {
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +58,8 @@ export default function LoginPage() {
       const result = await login(email.trim(), password);
       if (result === "otp_required") {
         setStep("otp");
-        setOtp("");
+        setOtp(["", "", "", "", "", ""]);
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
         router.push(nextRedirect());
       }
@@ -72,18 +74,49 @@ export default function LoginPage() {
     }
   }
 
+  function setOtpDigit(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[index] = digit;
+    setOtp(next);
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function onOtpKeyDown(
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function onOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (text.length > 0) {
+      const next = ["", "", "", "", "", ""];
+      text.split("").forEach((d, i) => (next[i] = d));
+      setOtp(next);
+      otpRefs.current[Math.min(text.length, 5)]?.focus();
+    }
+  }
+
   async function onOtp(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
-    if (otp.trim().length !== 6) {
-      fail("Enter the 6-digit code.");
+    const code = otp.join("");
+    if (code.length !== 6) {
+      fail("Enter all 6 digits.");
       return;
     }
 
     setLoading(true);
     try {
-      await verifyOtp(email.trim(), otp.trim());
+      await verifyOtp(email.trim(), code);
       router.push(nextRedirect());
     } catch (err) {
       fail(
@@ -192,10 +225,10 @@ export default function LoginPage() {
         <>
           <FadeIn>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400">
-              <KeyRound className="h-7 w-7" />
+              <Mail className="h-7 w-7" />
             </div>
             <h1 className="mt-4 text-center text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
-              Enter your code
+              Check your email
             </h1>
             <p className="mt-1.5 text-center text-sm text-zinc-500 dark:text-zinc-400">
               We sent a 6-digit code to{" "}
@@ -204,29 +237,32 @@ export default function LoginPage() {
               </span>
               .
             </p>
-            <p className="mt-1 text-center text-xs text-zinc-400 dark:text-zinc-500">
-              Development mode: read the code from the backend server log.
-            </p>
           </FadeIn>
 
           <form className="mt-8 space-y-5" onSubmit={onOtp} noValidate>
             <FadeIn delay={0.08}>
-              <label
-                htmlFor="otp"
-                className="block text-center text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Verification code
-              </label>
-              <input
-                id="otp"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                className="mt-2 w-full rounded-lg border border-transparent bg-zinc-100 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-zinc-900 shadow-sm transition placeholder:tracking-normal placeholder:text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:bg-white focus:outline-none dark:bg-zinc-800/50 dark:text-white dark:focus:bg-zinc-900"
-                placeholder="000000"
-              />
+              <div className="flex justify-center gap-2">
+                {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => {
+                      otpRefs.current[i] = el;
+                    }}
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => setOtpDigit(i, e.target.value)}
+                    onKeyDown={(e) => onOtpKeyDown(i, e)}
+                    onPaste={onOtpPaste}
+                    className={`h-12 w-11 rounded-lg border text-center text-xl font-bold text-zinc-900 shadow-sm transition dark:text-white ${
+                      error
+                        ? "border-rose-400 bg-rose-50 dark:border-rose-600 dark:bg-rose-950/30"
+                        : "border-zinc-300 bg-zinc-100 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700 dark:bg-zinc-800/50 dark:focus:border-blue-500 dark:focus:bg-zinc-900"
+                    }`}
+                    aria-label={`Digit ${i + 1}`}
+                  />
+                ))}
+              </div>
             </FadeIn>
 
             {error && (
@@ -244,6 +280,7 @@ export default function LoginPage() {
 
             <FadeIn delay={0.16}>
               <Button type="submit" loading={loading} className="w-full py-3">
+                <KeyRound className="h-4 w-4" />
                 Verify code
               </Button>
             </FadeIn>
