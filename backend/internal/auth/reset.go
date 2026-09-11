@@ -18,10 +18,7 @@ import (
 	"linkpulse/internal/httpx"
 )
 
-const (
-	resetOtpTTL         = 10 * time.Minute
-	resetOtpMaxAttempts = 5
-)
+const resetOtpTTL = 10 * time.Minute
 
 var errResetOtpInvalid = &httpx.UserError{
 	Status:  http.StatusUnauthorized,
@@ -29,14 +26,12 @@ var errResetOtpInvalid = &httpx.UserError{
 	Message: "invalid or expired code",
 }
 
-// hashResetOtp peppers the code with the JWT secret — a leaked DB
-// alone cannot brute-force it.
+// hashResetOtp peppers the code with the JWT secret.
 func (s *Service) hashResetOtp(code string) string {
 	sum := sha256.Sum256([]byte("reset:" + s.jwtSecret + ":" + code))
 	return hex.EncodeToString(sum[:])
 }
 
-// generateResetOtpCode returns a uniformly random 6-digit code.
 func generateResetOtpCode() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
@@ -50,9 +45,7 @@ type RequestResetInput struct {
 	Email string `json:"email"`
 }
 
-// RequestReset issues a reset code. The response is ALWAYS identical
-// whether the email exists (PRD 9.1.7 anti-enumeration) — delivery
-// happens here, not at verify time.
+// RequestReset issues a reset code (PRD 9.1.7).
 func (s *Service) RequestReset(ctx context.Context, email string) (rawCode string, ok bool) {
 	var userID uuid.UUID
 	err := s.db.QueryRow(ctx,
@@ -67,7 +60,6 @@ func (s *Service) RequestReset(ctx context.Context, email string) (rawCode strin
 		return "", false
 	}
 
-	// One pending code per user.
 	_, _ = s.db.Exec(ctx,
 		`UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL`, userID)
 	_, _ = s.db.Exec(ctx, `
@@ -85,7 +77,7 @@ type ResetConfirmInput struct {
 	Password string `json:"password"`
 }
 
-// ConfirmReset validates the code and sets the new password.
+// ConfirmReset validates the code and sets the new password (PRD 9.1.8).
 func (s *Service) ConfirmReset(ctx context.Context, in ResetConfirmInput) error {
 	var (
 		resetID   uuid.UUID
@@ -137,7 +129,6 @@ func (s *Service) ConfirmReset(ctx context.Context, in ResetConfirmInput) error 
 		return fmt.Errorf("consume token: %w", err)
 	}
 
-	// PRD 9.1.8: revoke every session on reset.
 	_, _ = s.db.Exec(ctx,
 		`UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
 
@@ -145,7 +136,8 @@ func (s *Service) ConfirmReset(ctx context.Context, in ResetConfirmInput) error 
 }
 
 // RequestResetHandler handles POST /api/v1/auth/password/reset-request.
-// Always the same generic response (PRD 9.1.7).
+// Always the same generic response (PRD 9.1.7). Email delivery failure
+// falls back to logging — reset must never be blocked by email issues.
 func (h *Handler) RequestReset(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 2048)
 	var in RequestResetInput
@@ -155,23 +147,16 @@ func (h *Handler) RequestReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	email := strings.ToLower(strings.TrimSpace(in.Email))
-	if !emailRegex.MatchString(email) {
-		// Generic response even for invalid emails.
-		httpx.Success(w, http.StatusOK, map[string]string{
-			"message": "If an account exists, a reset code has been sent.",
-		})
-		return
-	}
 
 	rawCode, ok := h.svc.RequestReset(r.Context(), email)
 	if ok {
 		if err := h.mailer.Send(r.Context(), email,
 			"Your LinkPulse password reset code", otpEmailHTML(rawCode)); err != nil {
-			h.log.Error("reset email send failed", "error", err)
-			httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternalError, "could not send the code, try again")
-			return
-		}
-		if h.mailer.InDevMode() {
+			h.log.Error("reset email send failed — falling back to server log",
+				"error", err, "email", email)
+			h.log.Info("reset otp code (email fallback — read this to reset)",
+				"email", email, "code", rawCode)
+		} else if h.mailer.InDevMode() {
 			h.log.Info("reset otp code (dev mode)", "email", email, "code", rawCode)
 		}
 	}

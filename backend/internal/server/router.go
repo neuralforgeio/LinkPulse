@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -86,9 +85,7 @@ func NewRouter(
 	publicRL := ratelimit.New(rlLimit(cfg.RateLimitPublicAPIPerMinute), time.Minute)
 	dashboardRL := ratelimit.New(rlLimit(cfg.RateLimitDashboardPerMinute), time.Minute)
 
-	// Outbound email: Resend when RESEND_API_KEY is set, logged
-	// otherwise (dev mode — OTP codes appear in the server log).
-	mailer := email.NewSender(os.Getenv("RESEND_API_KEY"))
+	mailer := email.NewSender()
 
 	authSvc := auth.NewService(db, auth.ServiceConfig{
 		JWTSecret:          cfg.JWTSecret,
