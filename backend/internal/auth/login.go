@@ -115,6 +115,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
         return LoginResult{}, fmt.Errorf("create otp: %w", err)
     }
     return LoginResult{
+        User:        UserOut{ID: userID, Name: name, Email: email},
         OtpRequired: true,
         OtpRawCode:  code,
         OtpExpires:  expiresAt,

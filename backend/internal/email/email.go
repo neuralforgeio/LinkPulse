@@ -5,7 +5,7 @@ import (
     "context"
     "encoding/json"
     "fmt"
-    "log/slog"
+    "io"
     "net/http"
     "time"
 )
@@ -17,11 +17,10 @@ type Sender struct {
 }
 
 // NewSender builds a Sender. An empty apiKey activates dev mode.
-func NewSender(apiKey string, log *slog.Logger) *Sender {
-    _ = log // used indirectly via Send's caller logging; kept for symmetry
+func NewSender(apiKey string) *Sender {
     return &Sender{
         apiKey: apiKey,
-        // The only sender available without a verified domain (free tier).
+        // The only sender address available without a verified domain.
         from: "LinkPulse <onboarding@resend.dev>",
     }
 }
@@ -62,7 +61,9 @@ func (s *Sender) Send(ctx context.Context, to, subject, html string) error {
     defer res.Body.Close()
 
     if res.StatusCode >= 300 {
-        return fmt.Errorf("resend rejected the email: status %d", res.StatusCode)
+        // Read the body — Resend puts the exact rejection reason here.
+        body, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
+        return fmt.Errorf("resend rejected the email (status %d): %s", res.StatusCode, string(body))
     }
     return nil
 }

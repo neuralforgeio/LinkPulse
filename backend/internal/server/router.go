@@ -88,7 +88,7 @@ func NewRouter(
 
 	// Outbound email: Resend when RESEND_API_KEY is set, logged
 	// otherwise (dev mode — OTP codes appear in the server log).
-	mailer := email.NewSender(os.Getenv("RESEND_API_KEY"), logger)
+	mailer := email.NewSender(os.Getenv("RESEND_API_KEY"))
 
 	authSvc := auth.NewService(db, auth.ServiceConfig{
 		JWTSecret:          cfg.JWTSecret,
